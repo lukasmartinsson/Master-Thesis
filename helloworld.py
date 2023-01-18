@@ -1,1 +1,1 @@
-print("helloworld 2 lukas1")
+print("helloworld 2 luk")
