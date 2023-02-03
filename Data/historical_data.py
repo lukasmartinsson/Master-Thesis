@@ -8,10 +8,36 @@ from alpaca.data.requests import  (CryptoBarsRequest, StockBarsRequest,
     StockLatestBarRequest)
 from alpaca.data.timeframe import TimeFrame
 
-def Historical_data(s_type: str, stock: list[str], timeframe: TimeFrame, start: str, end: str, client: StockHistoricalDataClient):
 
+def Historical_data(s_type: str, stock: list[str], timeframe: TimeFrame, start: str, end: str, client: StockHistoricalDataClient, save_csv: bool):
+
+    """
+    Historical_data(type: str, stock: List[str], timeframe: TimeFrame, start: str, end: str)
+
+    Parameters:
+
+        type (str): A string that specifies the type of asset for which to retrieve historical data
+            Currently implemented assets: ['Crypto', 'StockBars', 'StockQuotes','StockTrades','StockLatestTrade','StockLatestQuote','StockSnapshot','StockLatestBar']:
+        
+        stock (List[str]): A list of strings that specifies the stock for which to retrieve historical data.
+            Examples for crypto: ["BTC/USD"]
+            Examples for stocks: ["AAPL"]
+
+        timeframe (TimeFrame): A TimeFrame object that specifies the time frame for which to retrieve historical data
+            Example: TimeFrame.Day, TimeFrame.Hour, TimeFrame.Minute
+
+        start (str): A string in the format "YYYY-MM-DD HH:MM:SS" that specifies the start date and time for the historical data
+        
+        end (str): A string in the format "YYYY-MM-DD HH:MM:SS" that specifies the end date and time for the historical data
+
+        client: Takes two parameters, an "api_key" that is used to authenticate the client's access to the stock historical data service and a "secret_key" that is used to secure the client's connection.
+        
+        returns (Any): The function returns the historical data for the specified asset, stock, time frame, start and end date and time
+
+    """
+    
     if s_type == 'Crypto': return Crypto(stock, timeframe, start, end)
-    elif s_type == 'StockBars': return StockBars(stock, timeframe, start, end, client)
+    elif s_type == 'StockBars': return StockBars(stock, timeframe, start, end, client, save_csv)
     elif s_type == 'StockQuotes': return StockQuotes(stock, timeframe, start, end, client)
     elif s_type == 'StockTrades': return StockTrades(stock, timeframe, start, end, client)
     elif s_type == 'StockLatestTrade': return StockLatestTrade(stock, timeframe, start, end, client)
@@ -37,7 +63,7 @@ def Crypto(stock, timeframe, start, end):
     # Convert to dataframe and return
     return btc_bars.df
 
-def StockBars(stock, timeframe, start, end, client):
+def StockBars(stock, timeframe, start, end, client, save_csv):
 
     # Creating request object
     request_params = StockBarsRequest(
@@ -49,8 +75,13 @@ def StockBars(stock, timeframe, start, end, client):
 
     stock_bars = client.get_stock_bars(request_params)
 
+    df = stock_bars.df
+    
+    if save_csv:
+        df.to_csv('Data/Stock/StockBars/' + stock[0])
+
     # Convert to dataframe and return
-    return stock_bars.df
+    return df
 
 def StockQuotes(stock, timeframe, start, end, client):
 
