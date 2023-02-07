@@ -33,17 +33,17 @@ def Preprocessing(df: pd.DataFrame) -> pd.DataFrame:
     X_test_scaled = scaler.transform(X_test)
 
     # Convert the scaled data into tensors
-    train_X = torch.tensor(X_train_scaled).float()
-    train_X = torch.reshape(train_X,   (train_X.shape[0], 1, train_X.shape[1]))
+    X_train = torch.tensor(X_train_scaled).float()
+    X_train = torch.reshape(X_train,   (X_train.shape[0], 1, X_train.shape[1]))
     
-    test_X = torch.tensor(X_test_scaled).float()
-    test_X = torch.reshape(test_X,  (test_X.shape[0], 1, test_X.shape[1])) 
+    X_test = torch.tensor(X_test_scaled).float()
+    X_test = torch.reshape(X_test,  (X_test.shape[0], 1, X_test.shape[1])) 
 
-    train_Y = torch.tensor(y_train.values).float()
-    train_Y = train_Y.view(-1, 1)
+    y_train = torch.tensor(y_train.values).float()
+    y_train = y_train.view(-1, 1)
 
-    test_Y = torch.tensor(y_test.values).float()
-    test_Y = test_Y.view(-1, 1)
+    y_test = torch.tensor(y_test.values).float()
+    y_test = y_test.view(-1, 1)
 
     return X_train, X_test, y_train, y_test
 
