@@ -9,7 +9,7 @@ from alpaca.data.requests import  (CryptoBarsRequest, StockBarsRequest,
 from alpaca.data.timeframe import TimeFrame
 
 
-def Historical_data(s_type: str, stock: list[str], timeframe: TimeFrame, start: str, end: str, client: StockHistoricalDataClient, save_csv: bool):
+def Historical_data(s_type: str, stock: list[str], timeframe: TimeFrame, start: str, end: str, client: StockHistoricalDataClient, save_csv: bool, time_string: str):
 
     """
     Historical_data(type: str, stock: List[str], timeframe: TimeFrame, start: str, end: str)
@@ -37,7 +37,7 @@ def Historical_data(s_type: str, stock: list[str], timeframe: TimeFrame, start: 
     """
     
     if s_type == 'Crypto': return Crypto(stock, timeframe, start, end)
-    elif s_type == 'StockBars': return StockBars(stock, timeframe, start, end, client, save_csv)
+    elif s_type == 'StockBars': return StockBars(stock, timeframe, start, end, client, save_csv, time_string)
     elif s_type == 'StockQuotes': return StockQuotes(stock, timeframe, start, end, client)
     elif s_type == 'StockTrades': return StockTrades(stock, timeframe, start, end, client)
     elif s_type == 'StockLatestTrade': return StockLatestTrade(stock, timeframe, start, end, client)
@@ -63,7 +63,7 @@ def Crypto(stock, timeframe, start, end):
     # Convert to dataframe and return
     return btc_bars.df
 
-def StockBars(stock, timeframe, start, end, client, save_csv):
+def StockBars(stock, timeframe, start, end, client, save_csv, time_string):
 
     # Creating request object
     request_params = StockBarsRequest(
@@ -78,7 +78,7 @@ def StockBars(stock, timeframe, start, end, client, save_csv):
     df = stock_bars.df
     
     if save_csv:
-        df.to_csv('Data/Stock/StockBars/' + stock[0])
+        df.to_csv('Data/Stock/StockBars/' + stock[0] + '_' + time_string)
 
     # Convert to dataframe and return
     return df
@@ -171,4 +171,4 @@ def StockLatestBar(stock, timeframe, start, end, client):
     stock_latest_bar = client.get_stock_latest_bar(request_params)
 
     # Convert to dataframe and return
-    return stock_latest_bar.df
+    return stock_latest_bar.df  
