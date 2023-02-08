@@ -12,37 +12,34 @@ def Preprocessing(df: pd.DataFrame, lag:int = 1, dif_all:bool = True) -> pd.Data
         print("Error in dataframe, missing value")
 
 
-    col_names = list(df.columns)
-    df = df.values
-    
-    #Difference data
-    if dif_all:
-        diff = []
-        for i in range(len(df)):
-            value = df[i] - df[i - 1]
-            diff.append(value)
-        df = diff
-    
-    df = RobustScaler().fit_transform(df)
-    df = pd.DataFrame(df,columns=col_names).drop(0)
-
-
     # Add the difference between values (will be used as label)
-    res_df = [df.iloc[i]['open'] - df.iloc[i+lag]['open'] for i in range(len(df)-lag)]
-    
-    
-    # Resets the index and removes the first value that will have the wrong results
-    df = df[:-lag].reset_index()
-    print(df.head(5))
+    res_df = [df.iloc[i]['open'] - df.iloc[i+lag]['open'] for i in range(1,len(df)-lag)]
 
+    #Save colummn names for later
+    col_names = list(df.columns) + ['results']
+
+ 
+    #Diff all values if TRUE
+    if dif_all:
+        df = pd.DataFrame([df.values[i] - df.values[i-1] for i in range(1,len(df)-lag)])
+    
+    df['results'] = res_df
+    
+    ##Check diff before scaling to make sure that label isn't warped
+    diff_one_zero = (sum(y > 0 for y in res_df)-sum(y < 0 for y in res_df))/len(res_df)
+    print('The diff of one and zero prior to scaling is is: '+'{:.2%}'.format(diff_one_zero))
+
+    # Scale data using robust scaler
+    df = RobustScaler().fit_transform(df.values)
+    df = pd.DataFrame(df,columns=col_names)
+    
+    # Extract features and labels
     features = df[['open', 'high', 'low', 'close', 'volume', 'trade_count','vwap']].values
-    #labels = df['results'].values
-    labels = pd.DataFrame(res_df, columns=['results']).values
+    labels = df['results'].values
 
-    print(labels)
-
+    # Check diff post scaling
     diff_one_zero = (sum(y > 0 for y in labels)-sum(y < 0 for y in labels))/len(labels)
-    print('The diff of one and zero is: '+'{:.2%}'.format(diff_one_zero[0]))
+    print('The diff of one and zero post scaling is: '+'{:.2%}'.format(diff_one_zero))
 
     # Split the data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=0, shuffle = False)
