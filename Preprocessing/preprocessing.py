@@ -3,47 +3,59 @@ from sklearn.preprocessing import RobustScaler
 from sklearn.model_selection import train_test_split
 import torch
 
-def Preprocessing(df: pd.DataFrame) -> pd.DataFrame:    
-    
-    # Drop irrelevant values
-    #df = df.drop(columns=['symbol', 'timestamp'])
+import matplotlib.pyplot as plt
 
+def Preprocessing(df: pd.DataFrame, lag:int = 1, dif_all:bool = True) -> pd.DataFrame:    
+    
     # Check for NaN values
     if df.isnull().values.any():
         print("Error in dataframe, missing value")
 
-    # Add the difference between values (will be used as label)
-    res_df = [df.iloc[i]['open'] - df.iloc[i+1]['open'] for i in range(len(df)-1)]
-    labels = pd.DataFrame(res_df, columns=['results'])
 
-    # Resets the index and removes the first value that will have the wrong results
-    df = df[:-1].reset_index()
+    # Add the difference between values (will be used as label)
+    res_df = [df.iloc[i]['open'] - df.iloc[i+lag]['open'] for i in range(1,len(df)-lag)]
+
+    #Save colummn names for later
+    col_names = list(df.columns) + ['results']
+
+ 
+    #Diff all values if TRUE
+    if dif_all:
+        df = pd.DataFrame([df.values[i] - df.values[i-1] for i in range(1,len(df)-lag)])
     
-    features = df[['open', 'high', 'low', 'close', 'volume', 'trade_count','vwap']]
-    #labels = df['results']
+    df['results'] = res_df
     
+    ##Check diff before scaling to make sure that label isn't warped
+    diff_one_zero = (sum(y > 0 for y in res_df)-sum(y < 0 for y in res_df))/len(res_df)
+    print('The diff of one and zero prior to scaling is is: '+'{:.2%}'.format(diff_one_zero))
+
+    # Scale data using robust scaler
+    df = RobustScaler().fit_transform(df.values)
+    df = pd.DataFrame(df,columns=col_names)
+    
+    # Extract features and labels
+    features = df[['open', 'high', 'low', 'close', 'volume', 'trade_count','vwap']].values
+    labels = df['results'].values
+
+    # Check diff post scaling
+    diff_one_zero = (sum(y > 0 for y in labels)-sum(y < 0 for y in labels))/len(labels)
+    print('The diff of one and zero post scaling is: '+'{:.2%}'.format(diff_one_zero))
+
     # Split the data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=0, shuffle = False)
     
 
-    # Apply RobustScaler to the training set
-    scaler = RobustScaler().fit(X_train)
-
-    # Apply the scaling to the sets
-    X_train_scaled = scaler.transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-
     # Convert the scaled data into tensors
-    X_train = torch.tensor(X_train_scaled).float()
+    X_train = torch.tensor(X_train).float()
     X_train = torch.reshape(X_train,   (X_train.shape[0], 1, X_train.shape[1]))
     
-    X_test = torch.tensor(X_test_scaled).float()
+    X_test = torch.tensor(X_test).float()
     X_test = torch.reshape(X_test,  (X_test.shape[0], 1, X_test.shape[1])) 
 
-    y_train = torch.tensor(y_train.values).float()
+    y_train = torch.tensor(y_train).float()
     y_train = y_train.view(-1, 1)
 
-    y_test = torch.tensor(y_test.values).float()
+    y_test = torch.tensor(y_test).float()
     y_test = y_test.view(-1, 1)
 
     return X_train, X_test, y_train, y_test
