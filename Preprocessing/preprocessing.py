@@ -13,13 +13,14 @@ def Preprocessing(df: pd.DataFrame) -> pd.DataFrame:
         print("Error in dataframe, missing value")
 
     # Add the difference between values (will be used as label)
-    df['results'] = [df.iloc[i]['vwap'] - df.iloc[i-1]['vwap'] for i in range(len(df))]
-    
-    # Resets the index and removes the first value that will have the wrong results
-    df = df[1:].reset_index()
+    res_df = [df.iloc[i]['open'] - df.iloc[i+1]['open'] for i in range(len(df)-1)]
+    labels = pd.DataFrame(res_df, columns=['results'])
 
+    # Resets the index and removes the first value that will have the wrong results
+    df = df[:-1].reset_index()
+    
     features = df[['open', 'high', 'low', 'close', 'volume', 'trade_count','vwap']]
-    labels = df['results']
+    #labels = df['results']
     
     # Split the data into training and testing sets
     X_train, X_test, y_train, y_test = train_test_split(features, labels, test_size=0.2, random_state=0, shuffle = False)
