@@ -7,24 +7,26 @@ import matplotlib.pyplot as plt
 
 def Preprocessing(df: pd.DataFrame, lag:int = 1, dif_all:bool = True) -> pd.DataFrame:    
     
+    df = df.drop(['symbol', 'timestamp'], axis=1)
+
     # Check for NaN values
     if df.isnull().values.any():
         print("Error in dataframe, missing value")
 
 
     # Add the difference between values (will be used as label)
-    res_df = [df.iloc[i]['open'] - df.iloc[i+lag]['open'] for i in range(1,len(df)-lag)]
+    res_df = [df.iloc[i+lag]['open'] - df.iloc[i]['open'] for i in range(1,len(df)-lag)]
 
     #Save colummn names for later
     col_names = list(df.columns) + ['results']
 
- 
     #Diff all values if TRUE
     if dif_all:
         df = pd.DataFrame([df.values[i] - df.values[i-1] for i in range(1,len(df)-lag)])
+    else: df = df[1:-lag]
     
     df['results'] = res_df
-    
+
     ##Check diff before scaling to make sure that label isn't warped
     diff_one_zero = (sum(y > 0 for y in res_df)-sum(y < 0 for y in res_df))/len(res_df)
     print('The diff of one and zero prior to scaling is is: '+'{:.2%}'.format(diff_one_zero))
