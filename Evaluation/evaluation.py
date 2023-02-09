@@ -34,7 +34,7 @@ def Evaluator_LSTM(model, data, learning_rate: int, num_epochs :int, epoch_vis:b
     # Evaluate the model
     with torch.no_grad():
         y_pred = model(X_test)
-        accuracy = sum(y1 * y2 >= 0 for y1, y2 in zip(y_pred, y_test))/len(y_pred)
+        accuracy = sum(y1 * y2 > 0 for y1, y2 in zip(y_pred, y_test))/len(y_pred)
         
         if epoch_vis:
             print(f'Accuracy: {accuracy[0]}')
@@ -75,7 +75,7 @@ def Evaluator_LSTM(model, data, learning_rate: int, num_epochs :int, epoch_vis:b
         axs[1,0].set_xlabel('Counts')
         axs[1,0].set_ylabel('Frequency')
 
-        axs[1,1].plot(predictions)
+        axs[1,1].plot(predictions[:-1])
         axs[1,1].set_title('Accuracy for each 100 timesteps')
         axs[1,1].set_xlabel('Timestep')
         axs[1,1].set_ylabel('Accuracy')
