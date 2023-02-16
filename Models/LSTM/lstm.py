@@ -1,5 +1,8 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.optim import Adam
+
 
 class LSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, output_size):
@@ -15,6 +18,8 @@ class LSTM(nn.Module):
         c_0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size) #internal state
         # Propagate input through LSTM
         out, (hn, cn) = self.lstm(x, (h_0, c_0))
+        out, (hn, cn) = self.lstm(out, (h_0, c_0))
+        out, (hn, cn) = self.lstm(out, (h_0, c_0))
         # Select last output
         out = out[:, -1, :]
         # Pass through fully connected layer
