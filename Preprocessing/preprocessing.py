@@ -6,6 +6,10 @@ import torch.utils.data as data_utils
 
 def Preprocessing(df: pd.DataFrame, lag:int = 1, batch_size:int = 32, dif_all:bool = True, num_workers:int = 4) -> tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:    
     
+    time_data = pd.to_datetime(df['timestamp'])
+    weekday = time_data.dt.weekday.values[1:-lag]
+    hour = time_data.dt.hour.values[1:-lag]
+
     df = df.drop(['symbol', 'timestamp'], axis=1)
 
     # Check for NaN values
@@ -18,8 +22,11 @@ def Preprocessing(df: pd.DataFrame, lag:int = 1, batch_size:int = 32, dif_all:bo
 
     #Diff all values if TRUE
     df = pd.DataFrame((df.values[1:-lag] - df.values[:-(lag+1)] ) if dif_all else df[1:-lag])
-    
+   
+   #can make nicer if needed
     df['results'] = results[1:]
+    df['weekday'] = weekday
+    df['hour'] = hour
     
     #Check diff before scaling to make sure that label isn't warped
     diff_one_zero = (sum(y > 0 for y in df['results'])-sum(y < 0 for y in df['results']))/len(df['results'])
@@ -72,6 +79,11 @@ def Preprocessing(df: pd.DataFrame, lag:int = 1, batch_size:int = 32, dif_all:bo
 
 def preprocessing_improved(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_all:bool = True, train_size:int=0.9) -> tuple[torch.Tensor, torch.Tensor]:
 
+    #Extract week and day
+    time_data = pd.to_datetime(df['timestamp'])
+    weekday = time_data.dt.weekday.values[1:]
+    hour = time_data.dt.hour.values[1:]
+
     # Drop symbol and timestamp from df
     df = df.drop(['symbol', 'timestamp'], axis=1)
 
@@ -80,13 +92,23 @@ def preprocessing_improved(df: pd.DataFrame, lag:int = 1, sequence_length:int = 
         print("Error in dataframe, missing value")
 
     # Calculates the change in close price
-    df = df.assign(change=df['close'] - df['close'].shift(lag))
+    change = (df['close'] - df['close'].shift(lag)).dropna().reset_index(drop=True)
 
     # Calculates the difference in columns if set to true
-    df = df.diff().dropna() if dif_all else df.dropna()
+    df = df.diff().dropna() if dif_all else df.dropna() #Might be more efficient to use iloc so we dont have to loop through everything?
 
-    # Split the dataset into test and train data
+    #Assign week and day after, since they are features rather than timeseries, and hence shouldnt' be differenced
+    df = df.assign(change = change,
+                   weekday = weekday,
+                   hour = hour )
+
+    #Shift function goes backwards, we wont have the "real" results for the last "lag" instances
+    df = df[:-lag]
+
+
+    # Split the dataset into test and train data --> 
     df_train, df_test = df[:int(len(df)*train_size)], df[int(len(df)*train_size)+lag:]
+
 
     # Scales the data using robustscaler
     scaler = RobustScaler().fit(df_train)
@@ -101,12 +123,12 @@ def preprocessing_improved(df: pd.DataFrame, lag:int = 1, sequence_length:int = 
 def create_sequences(df: pd.DataFrame, prediction:str, sequence_length:int):
 
     # Get the data as a PyTorch tensor
-    data = torch.tensor(df.values, dtype=torch.float)
+    data = torch.tensor(df.drop(['change'],axis=1).values, dtype=torch.float)
 
     # Create all the sequences at once using PyTorch's tensor slicing
-    sequences = torch.stack([data[i:i+sequence_length] for i in range(len(data) - sequence_length)])
+    sequences = torch.stack([data[i:i+sequence_length] for i in range(len(data) - sequence_length + 1)]) #Changed to so that label and feature have the same position
 
     # Get the labels as a separate PyTorch tensor using pandas' .iloc method
-    labels = torch.tensor(df.iloc[sequence_length:][prediction].values, dtype=torch.float)
+    labels = torch.tensor(df.iloc[sequence_length-1:][prediction].values, dtype=torch.float) #Changed to so that label and feature have the same position
 
     return sequences, labels
