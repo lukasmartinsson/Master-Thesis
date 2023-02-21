@@ -4,7 +4,7 @@ from sklearn.model_selection import train_test_split
 import torch
 import torch.utils.data as data_utils
 
-def Preprocessing(df: pd.DataFrame, lag:int = 1, batch_size:int = 32, dif_all:bool = True, num_workers:int = 4) -> tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader]:    
+def Preprocessing(df: pd.DataFrame, lag:int = 1, batch_size:int = 32, dif_all:bool = True, num_workers:int = 4) -> tuple:    
     
     df = df.drop(['symbol', 'timestamp'], axis=1)
 
@@ -70,7 +70,7 @@ def Preprocessing(df: pd.DataFrame, lag:int = 1, batch_size:int = 32, dif_all:bo
     return X_train, X_test[lag+1:], y_train, y_test[lag+1:]
 '''
 
-def preprocessing_improved(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_all:bool = True, train_size:int=0.9) -> tuple[torch.Tensor, torch.Tensor]:
+def preprocessing_improved(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_all:bool = True, train_size:int=0.9) -> tuple:
 
     # Drop symbol and timestamp from df
     df = df.drop(['symbol', 'timestamp'], axis=1)

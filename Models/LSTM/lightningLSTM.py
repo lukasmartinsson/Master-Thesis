@@ -50,7 +50,7 @@ class LightningLSTM(pl.LightningModule):
 
         loss, output = self(sequences, labels)
 
-        self.log("train_loss", loss, prog_bar=True,logger=True)
+        self.log("val_loss", loss, prog_bar=True,logger=True)
         return loss
 
         
@@ -60,7 +60,7 @@ class LightningLSTM(pl.LightningModule):
 
         loss, output = self(sequences, labels)
 
-        self.log("train_loss", loss, prog_bar=True,logger=True)
+        self.log("test_loss", loss, prog_bar=True,logger=True)
         return loss
 
     def configure_optimizers(self):
