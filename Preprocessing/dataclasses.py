@@ -1,5 +1,5 @@
 from torch.utils.data import Dataset, DataLoader
-from data_masking import VPPMaskedInputDataset
+from data_masking import VPPMaskedInputDataset, collate_unsuperv
 import pytorch_lightning as pl
 
 class StockDataset(Dataset):
@@ -36,7 +36,7 @@ class StockPriceDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         return DataLoader(self.train_data, batch_size=1, shuffle=False, num_workers=self.num_workers)
 
-class StockPriceMTSTDataModule(pl.LightningDataModule):
+class MTSTDataModule(pl.LightningDataModule):
     def __init__(self, train_sequence, test_sequence, batch_size:int = 8, num_workers:int = 4):
         super().__init__()
         self.train_sequence = train_sequence
@@ -46,5 +46,17 @@ class StockPriceMTSTDataModule(pl.LightningDataModule):
 
     def setup(self, stage=None):
         if self.training:
-            self.train_dataset = VPPMaskedInputDataset(self.training_set[0],
-                                                       self.training_set[1])
+            self.train_dataset = VPPMaskedInputDataset(self.train_sequence[0],
+                                                       self.train_sequence[1])
+
+    def train_dataloader(self):
+        train_dataloader = DataLoader(
+            self.train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
+            pin_memory=True,
+            collate_fn=lambda x: collate_unsuperv(x, max_len=self.batch_size),
+            drop_last=False)
+        print(f"Train iterations: {len(train_dataloader)}")
+        return train_dataloader
