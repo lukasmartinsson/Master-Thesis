@@ -22,11 +22,13 @@ class LSTM(nn.Module):
         return self.fc(h)
 
 class LightningLSTM(pl.LightningModule):
-    def __init__(self, input_size:int, hidden_size:int, num_layers:int):
+    def __init__(self, input_size:int, hidden_size:int, num_layers:int, learning_rate:int = 0.01):
         super().__init__()
         self.model = LSTM(input_size, hidden_size, num_layers)
         self.criterion = nn.MSELoss()
 
+        self.learning_rate = learning_rate
+        
     def forward(self, x, labels = None):
         output = self.model(x)
         loss = 0
@@ -64,4 +66,4 @@ class LightningLSTM(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return AdamW(self.parameters(), lr= 0.0001)
+        return AdamW(self.parameters(), lr= self.learning_rate)
