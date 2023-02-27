@@ -109,16 +109,20 @@ def preprocessing_improved(df: pd.DataFrame, lag:int = 1, sequence_length:int = 
     # Split the dataset into test and train data --> 
     df_train, df_test = df[:int(len(df)*train_size)], df[int(len(df)*train_size)+lag:]
 
+    print("Pre", df_test[sequence_length:]['change'].values)
+
 
     # Scales the data using robustscaler
     scaler = RobustScaler().fit(df_train)
     df_train = pd.DataFrame(scaler.transform(df_train), index = df_train.index, columns = df_train.columns)
     df_test = pd.DataFrame(scaler.transform(df_test), index = df_test.index, columns = df_test.columns)
 
+    print("Post", df_test[sequence_length:]['change'].values)
+    
     train_sequence = create_sequences(df_train, 'change', sequence_length)
     test_sequence = create_sequences(df_test, 'change', sequence_length)
 
-    return train_sequence, test_sequence
+    return train_sequence, test_sequence, scaler
 
 def create_sequences(df: pd.DataFrame, prediction:str, sequence_length:int):
 
