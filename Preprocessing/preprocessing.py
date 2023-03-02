@@ -3,8 +3,9 @@ from sklearn.preprocessing import RobustScaler
 from sklearn.model_selection import train_test_split
 import torch
 import torch.utils.data as data_utils
+import numpy as np
 
-def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_all:bool = True, train_size:int=0.9) -> tuple:
+def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_all:bool = True, train_size:int=0.9, TSAI = False, CLF = False) -> tuple:
 
     # Extract week and day
     time_data = pd.to_datetime(df['timestamp'])
@@ -32,6 +33,7 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
     #Shift function goes backwards, we wont have the "real" results for the last "lag" instances
     df = df[:-lag]
 
+    
     # Split the dataset into test and train data --> 
     df_train, df_test = df[:int(len(df)*train_size)], df[int(len(df)*train_size)+lag:]
 
@@ -40,12 +42,17 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
     df_train = pd.DataFrame(scaler.transform(df_train), index = df_train.index, columns = df_train.columns)
     df_test = pd.DataFrame(scaler.transform(df_test), index = df_test.index, columns = df_test.columns)
 
+    if CLF: 
+        df_train["change"] = np.where(df_train["change"] < 0, 0, 1)
+        df_test["change"] = np.where(df_test["change"] < 0, 0, 1)
 
-    train_sequence = create_sequences2(df_train, 'change', sequence_length)
-    test_sequence = create_sequences2(df_test, 'change', sequence_length)
+    if TSAI:
+        train_sequence = create_sequences_2(df_train, 'change', sequence_length)
+        test_sequence = create_sequences_2(df_test, 'change', sequence_length)
     
-    train_sequence = create_sequences(df_train, 'change', sequence_length)
-    test_sequence = create_sequences(df_test, 'change', sequence_length)
+    else:
+        train_sequence = create_sequences(df_train, 'change', sequence_length)
+        test_sequence = create_sequences(df_test, 'change', sequence_length)
 
     return train_sequence, test_sequence, scaler
 
@@ -63,7 +70,7 @@ def create_sequences(df: pd.DataFrame, prediction:str, sequence_length:int):
     return sequences, labels
 
 
-def create_sequences2(df: pd.DataFrame, prediction: str, sequence_length: int):
+def create_sequences_2(df: pd.DataFrame, prediction: str, sequence_length: int):
     # Get the data as a PyTorch tensor
     data = torch.tensor(df.drop([prediction], axis=1).values, dtype=torch.float)
 
