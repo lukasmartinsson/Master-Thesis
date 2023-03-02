@@ -4,9 +4,9 @@ from sklearn.model_selection import train_test_split
 import torch
 import torch.utils.data as data_utils
 
-def preprocessing_improved(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_all:bool = True, train_size:int=0.9) -> tuple:
+def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_all:bool = True, train_size:int=0.9) -> tuple:
 
-    #Extract week and day
+    # Extract week and day
     time_data = pd.to_datetime(df['timestamp'])
     weekday = time_data.dt.weekday.values[1:]
     hour = time_data.dt.hour.values[1:]
@@ -26,12 +26,11 @@ def preprocessing_improved(df: pd.DataFrame, lag:int = 1, sequence_length:int = 
 
     #Assign week and day after, since they are features rather than timeseries, and hence shouldnt' be differenced
     df = df.assign(change = change,
-                   weekday = weekday,
-                   hour = hour )
+              weekday = weekday,
+              hour = hour )
 
     #Shift function goes backwards, we wont have the "real" results for the last "lag" instances
     df = df[:-lag]
-
 
     # Split the dataset into test and train data --> 
     df_train, df_test = df[:int(len(df)*train_size)], df[int(len(df)*train_size)+lag:]
@@ -41,8 +40,12 @@ def preprocessing_improved(df: pd.DataFrame, lag:int = 1, sequence_length:int = 
     df_train = pd.DataFrame(scaler.transform(df_train), index = df_train.index, columns = df_train.columns)
     df_test = pd.DataFrame(scaler.transform(df_test), index = df_test.index, columns = df_test.columns)
 
+
     train_sequence = create_sequences2(df_train, 'change', sequence_length)
     test_sequence = create_sequences2(df_test, 'change', sequence_length)
+    
+    train_sequence = create_sequences(df_train, 'change', sequence_length)
+    test_sequence = create_sequences(df_test, 'change', sequence_length)
 
     return train_sequence, test_sequence, scaler
 
@@ -58,6 +61,7 @@ def create_sequences(df: pd.DataFrame, prediction:str, sequence_length:int):
     labels = torch.tensor(df.iloc[sequence_length-1:][prediction].values, dtype=torch.float) #Changed to so that label and feature have the same position
 
     return sequences, labels
+
 
 def create_sequences2(df: pd.DataFrame, prediction: str, sequence_length: int):
     # Get the data as a PyTorch tensor
