@@ -30,7 +30,7 @@ class StockPriceDataModule(pl.LightningDataModule):
         return DataLoader(self.train_data, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers)
         
     def val_dataloader(self):
-        return DataLoader(self.train_data, batch_size=1, shuffle=False, num_workers=self.num_workers)
+        return DataLoader(self.test_data, batch_size=1, shuffle=False, num_workers=self.num_workers)
 
     def test_dataloader(self):
-        return DataLoader(self.train_data, batch_size=1, shuffle=False, num_workers=self.num_workers)
+        return DataLoader(self.test_data, batch_size=1, shuffle=False, num_workers=self.num_workers)

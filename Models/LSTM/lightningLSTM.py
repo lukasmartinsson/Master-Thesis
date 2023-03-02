@@ -18,8 +18,7 @@ class LSTM(nn.Module):
         
         out, (h, c) = self.lstm(x)
         h = h[-1]
-
-        return self.fc(h)
+        return self.fc(out[:,-1,:])
 
 class LightningLSTM(pl.LightningModule):
     def __init__(self, input_size:int, hidden_size:int, num_layers:int, learning_rate:int = 0.01):
@@ -42,7 +41,7 @@ class LightningLSTM(pl.LightningModule):
 
         loss, output = self(sequences, labels)
 
-        self.log("train_loss", loss, prog_bar=True,logger=True)
+        self.log('train_loss', loss, prog_bar=True, logger=True)
         return loss
 
         
@@ -52,7 +51,7 @@ class LightningLSTM(pl.LightningModule):
 
         loss, output = self(sequences, labels)
 
-        self.log("val_loss", loss, prog_bar=True,logger=True)
+        self.log('val_loss', loss, prog_bar=True, logger=True)
         return loss
 
         
@@ -62,7 +61,7 @@ class LightningLSTM(pl.LightningModule):
 
         loss, output = self(sequences, labels)
 
-        self.log("test_loss", loss, prog_bar=True,logger=True)
+        self.log('test_loss', loss, prog_bar=True,logger=True)
         return loss
 
     def configure_optimizers(self):
