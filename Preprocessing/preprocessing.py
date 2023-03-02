@@ -39,6 +39,10 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
     scaler = RobustScaler().fit(df_train)
     df_train = pd.DataFrame(scaler.transform(df_train), index = df_train.index, columns = df_train.columns)
     df_test = pd.DataFrame(scaler.transform(df_test), index = df_test.index, columns = df_test.columns)
+
+
+    train_sequence = create_sequences2(df_train, 'change', sequence_length)
+    test_sequence = create_sequences2(df_test, 'change', sequence_length)
     
     train_sequence = create_sequences(df_train, 'change', sequence_length)
     test_sequence = create_sequences(df_test, 'change', sequence_length)
@@ -59,3 +63,16 @@ def create_sequences(df: pd.DataFrame, prediction:str, sequence_length:int):
     return sequences, labels
 
 
+def create_sequences2(df: pd.DataFrame, prediction: str, sequence_length: int):
+    # Get the data as a PyTorch tensor
+    data = torch.tensor(df.drop([prediction], axis=1).values, dtype=torch.float)
+
+    # Create all the sequences at once using PyTorch's tensor slicing
+    sequences = torch.zeros((len(data) - sequence_length + 1, data.shape[1], sequence_length), dtype=torch.float)
+    
+    for i in range(len(data) - sequence_length + 1): sequences[i] = data[i:i+sequence_length].T
+
+    # Get the labels as a separate PyTorch tensor using pandas' .iloc method
+    labels = torch.tensor(df.iloc[sequence_length-1:][prediction].values, dtype=torch.float)
+
+    return sequences, labels
