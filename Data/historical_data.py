@@ -8,6 +8,25 @@ from alpaca.data.requests import  (CryptoBarsRequest, StockBarsRequest,
     StockLatestBarRequest)
 from alpaca.data.timeframe import TimeFrame
 
+stocks = [['AAPL'], ['MSFT'], ['GOOG'], ['TSLA'], ['NVDA']]
+
+for stock in stocks:
+
+    timeframes = [TimeFrame.Day, TimeFrame.Hour, TimeFrame.Minute]
+    time_strings = ['Day', 'Hour', 'Minute']
+
+    for timeframe, time_string in zip(timeframes, time_strings):
+
+        s_type = "StockBars"
+        stock = stock
+        timeframe = timeframe
+        start = "2020-08-20 06:00:00"
+        end = "2021-08-20 06:00:00"
+        client = StockHistoricalDataClient("PKV7BABG3DGE0GYL137W", "af1eQghpVgbyX2lh2T9n2ColmVYXHCWndQbKR3Lr")
+        save_csv = True
+        time_string = time_string
+
+        df = Historical_data(s_type = s_type, stock = stock, timeframe = timeframe, start = start, end = end, client = client, save_csv = save_csv , time_string = time_string)
 
 def Historical_data(s_type: str, stock: list[str], timeframe: TimeFrame, start: str, end: str, client: StockHistoricalDataClient, save_csv: bool, time_string: str):
 
