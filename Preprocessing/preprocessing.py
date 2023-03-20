@@ -2,6 +2,7 @@ import pandas as pd
 from sklearn.preprocessing import RobustScaler
 from sklearn.model_selection import train_test_split
 import torch
+from ta import add_all_ta_features
 
 def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_all:bool = True, 
                   train_size:int=0.9, TSAI:bool = False, CLF:bool = False, index:str = None, 
@@ -20,7 +21,6 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
             df_index = pd.read_csv('Data/twelve_data/SPY_'+index).add_suffix('_new').rename(columns={'datetime_new':'datetime'})
             df = pd.merge(df,df_index, on = 'datetime', how='left').fillna(method='ffill')
         time_data = pd.to_datetime(df['datetime'])
-
         df = df.drop(['datetime'], axis=1)
 
     # Extract week and day
@@ -31,8 +31,13 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
     if df.isnull().values.any():
         print("Error in dataframe, missing value")
 
-    # Calculates the change in close price
-    change = (df['close'] - df['close'].shift(lag)).dropna().reset_index(drop=True)
+    # Calculates the change in close price to use for classification
+
+    print(df)
+    if CLF: change = (df['close'] - df['close'].shift(lag)).dropna().reset_index(drop=True)
+    
+    # Get price lag steps into the future
+    else: change = df['close'][lag:].reset_index(drop=True)
 
     # Calculates the difference in columns if set to true
     df = df.diff().dropna() if dif_all else df[1:]
@@ -64,23 +69,17 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
         df['change'] = df['positive_bucket']
         df = df.drop(['abs_column','negative_bucket','positive_bucket'], axis=1)
 
-        
     
-    # Split the dataset into test and train data --> 
+    print(df)
+    # Split the dataset into test and train data (only for visualization)
     df_train, df_test = df[:int(len(df)*train_size)], df[int(len(df)*train_size)+lag:]
 
     # Scales the data using robustscaler
     scaler = RobustScaler().fit(df_train)
     df_scaled = pd.DataFrame(scaler.transform(df), index = df.index, columns = df.columns)
 
-    #df_train_scaled = pd.DataFrame(scaler.transform(df_train), index = df_train.index, columns = df_train.columns)
-    #df_test_scaled = pd.DataFrame(scaler.transform(df_test), index = df_test.index, columns = df_test.columns)
-
     if CLF:
         df_scaled['change'] = df['change']
-
-        #df_train_scaled['change'] = df_train['change']
-        #df_test_scaled['change'] = df_test['change']
 
         # Create a new dataframe for info
         df_info = pd.DataFrame({'Label': df['change'].value_counts().sort_index(ascending=True).index, 
@@ -101,13 +100,9 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
 
     if TSAI:
         df_sequence = create_sequences_2(df_scaled, 'change', sequence_length)
-        #train_sequence = create_sequences_2(df_train_scaled, 'change', sequence_length)
-        #test_sequence = create_sequences_2(df_test_scaled, 'change', sequence_length)
     
     else:
         df_sequence = create_sequences(df_scaled, 'change', sequence_length)
-        #train_sequence = create_sequences(df_train_scaled, 'change', sequence_length)
-        #test_sequence = create_sequences(df_test_scaled, 'change', sequence_length)
 
     # Split the dataset into test and train data --> 
     X_train_sequence, X_test_sequence, Y_train_sequence, Y_test_sequence = train_test_split(df_sequence[0], df_sequence[1], test_size=1-train_size, random_state=42, shuffle = False)
