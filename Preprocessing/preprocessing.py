@@ -3,10 +3,35 @@ from sklearn.preprocessing import RobustScaler
 from sklearn.model_selection import train_test_split
 import torch
 from ta import add_all_ta_features
+from ta.volatility import BollingerBands
+from ta.trend import MACD
+from ta.momentum import RSIIndicator
+from ta.volume import ChaikinMoneyFlowIndicator
 
 def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_all:bool = True, 
                   train_size:int=0.9, TSAI:bool = False, CLF:bool = False, index:str = None, 
-                  data:str = "alpacca", buckets:int=1, print_info:bool=False) -> tuple:
+                  data:str = "alpacca", buckets:int=1, print_info:bool=False, TI = False) -> tuple:
+    
+    if TI:
+        #Moving Average Convergence Divergence --> Trend
+        indicator_MACD = MACD(close=df["close"], window_slow= 30, window_fast= 10, window_sign= 5)
+        df['MACD_line'] = indicator_MACD.macd()
+        df['MACD_diff'] = indicator_MACD.macd_diff()
+        df['MACD_signal'] = indicator_MACD.macd_signal()
+
+        #Relative strength index --> Momentum
+        df['RSI'] = RSIIndicator(close=df["close"],window=20).rsi()
+
+        #Bollinger bands --> Volatility
+        indicator_bb = BollingerBands(close=df["close"], window=20, window_dev=2)
+        df['bb_bbm'] = indicator_bb.bollinger_mavg()
+        df['bb_bbh'] = indicator_bb.bollinger_hband()
+        df['bb_bbl'] = indicator_bb.bollinger_lband()
+        df['bb_bbhi'] = indicator_bb.bollinger_hband_indicator()
+        df['bb_bbli'] = indicator_bb.bollinger_lband_indicator()
+
+        #Volume --> Chaikin Money Flow
+        df['CMF'] = ChaikinMoneyFlowIndicator(high=df["high"], low = df["low"], close = df["close"], volume=df["volume"], window=20).chaikin_money_flow()
 
     #Check if the input data comes from alpacca or twelve, and if the spy index should be added as features
     if data == "alpacca": 
@@ -33,7 +58,6 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
 
     # Calculates the change in close price to use for classification
 
-    print(df)
     if CLF: change = (df['close'] - df['close'].shift(lag)).dropna().reset_index(drop=True)
     
     # Get price lag steps into the future
@@ -70,7 +94,6 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
         df = df.drop(['abs_column','negative_bucket','positive_bucket'], axis=1)
 
     
-    print(df)
     # Split the dataset into test and train data (only for visualization)
     df_train, df_test = df[:int(len(df)*train_size)], df[int(len(df)*train_size)+lag:]
 
