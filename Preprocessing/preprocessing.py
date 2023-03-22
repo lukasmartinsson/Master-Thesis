@@ -12,26 +12,8 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
                   train_size:int=0.9, TSAI:bool = False, CLF:bool = False, index:str = None, 
                   data:str = "alpacca", buckets:int=1, print_info:bool=False, TI = False) -> tuple:
     
-    if TI:
-        #Moving Average Convergence Divergence --> Trend
-        indicator_MACD = MACD(close=df["close"], window_slow= 30, window_fast= 10, window_sign= 5)
-        df['MACD_line'] = indicator_MACD.macd()
-        df['MACD_diff'] = indicator_MACD.macd_diff()
-        df['MACD_signal'] = indicator_MACD.macd_signal()
-
-        #Relative strength index --> Momentum
-        df['RSI'] = RSIIndicator(close=df["close"],window=20).rsi()
-
-        #Bollinger bands --> Volatility
-        indicator_bb = BollingerBands(close=df["close"], window=20, window_dev=2)
-        df['bb_bbm'] = indicator_bb.bollinger_mavg()
-        df['bb_bbh'] = indicator_bb.bollinger_hband()
-        df['bb_bbl'] = indicator_bb.bollinger_lband()
-        df['bb_bbhi'] = indicator_bb.bollinger_hband_indicator()
-        df['bb_bbli'] = indicator_bb.bollinger_lband_indicator()
-
-        #Volume --> Chaikin Money Flow
-        df['CMF'] = ChaikinMoneyFlowIndicator(high=df["high"], low = df["low"], close = df["close"], volume=df["volume"], window=20).chaikin_money_flow()
+    #add technical indicators
+    if TI: df = add_TI(df.copy()).dropna().reset_index(drop=True)
 
     #Check if the input data comes from alpacca or twelve, and if the spy index should be added as features
     if data == "alpacca": 
@@ -93,7 +75,6 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
         df['change'] = df['positive_bucket']
         df = df.drop(['abs_column','negative_bucket','positive_bucket'], axis=1)
 
-    
     # Split the dataset into test and train data (only for visualization)
     df_train, df_test = df[:int(len(df)*train_size)], df[int(len(df)*train_size)+lag:]
 
@@ -161,26 +142,25 @@ def create_sequences_2(df: pd.DataFrame, prediction: str, sequence_length: int):
 
     return sequences, labels
 
-def df_buckets(df: pd.DataFrame, buckets:int=1):
-        # Create a new column with absolute values
-        df['abs_column'] = df['change'].abs()
+def add_TI(df):
+        #Moving Average Convergence Divergence --> Trend
+        indicator_MACD = MACD(close=df["close"], window_slow= 20, window_fast= 10, window_sign= 5)
+        df['MACD_line'] = indicator_MACD.macd()
+        df['MACD_diff'] = indicator_MACD.macd_diff()
+        df['MACD_signal'] = indicator_MACD.macd_signal()
 
-        # Divide the positive values into n buckets with custom labels
-        df.loc[df['change'] >= 0, 'positive_bucket'] = pd.qcut(df.loc[df['change'] >= 0, 'abs_column'], q=buckets, labels=False)+1
+        #Relative strength index --> Momentum
+        df['RSI'] = RSIIndicator(close=df["close"],window=20).rsi()
 
-        # Divide the negative values into n buckets with custom labels
-        df.loc[df['change'] < 0, 'negative_bucket'] = pd.qcut(df.loc[df['change'] < 0, 'abs_column'], q=buckets, labels=False)
+        #Bollinger bands --> Volatility
+        indicator_bb = BollingerBands(close=df["close"], window=20, window_dev=2)
+        df['bb_bbm'] = indicator_bb.bollinger_mavg()
+        df['bb_bbh'] = indicator_bb.bollinger_hband()
+        df['bb_bbl'] = indicator_bb.bollinger_lband()
+        df['bb_bbhi'] = indicator_bb.bollinger_hband_indicator()
+        df['bb_bbli'] = indicator_bb.bollinger_lband_indicator()
 
-        # Fill 
-        df['positive_bucket'] = df['positive_bucket'].fillna(-df['negative_bucket'])+buckets-1
-        print(df.groupby('positive_bucket')['change'].agg(['min', 'max']))
-        
-        #Labels need to be 0-->2n-1
-        df['change'] = df['positive_bucket']
-        df = df.drop(['abs_column','negative_bucket','positive_bucket'], axis=1)
-
-        # print the resulting dataframe
-        print('Split full dataset')
-        print(df['change'].value_counts())
+        #Volume --> Chaikin Money Flow
+        df['CMF'] = ChaikinMoneyFlowIndicator(high=df["high"], low = df["low"], close = df["close"], volume=df["volume"], window=20).chaikin_money_flow()
 
         return df

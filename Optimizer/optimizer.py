@@ -7,7 +7,7 @@ import json
 from Preprocessing.preprocessing import preprocessing
 from tsai.all import *
 
-def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int):
+def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15):
 
     # Load or create a new results DataFrame
     global results_df
@@ -102,12 +102,31 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int):
                             d_ff=d_ff,
                             dropout=dropout)
             training_time = time.time() - start
+        if model_type == 'mini_rocket':
+            num_features = trial.suggest_categorical('num_features', [1000,2500,5000,10000])
+            max_dilations_per_kernel = trial.suggest_categorical('max_dilations_per_kernel', [8, 16, 32, 64])
+            kernel_size = trial.suggest_int('kernal_size',2,20)
+            max_num_channels = trial.suggest_int('max_num_channels ',2,20)
+            dropout = trial.suggest_float("dropout", 0.0, 0.5, step=.1) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
 
+            mrf = MiniRocketFeaturesPlus(X.shape[1], X.shape[2],
+                            num_features=num_features,
+                            max_dilations_per_kernel=max_dilations_per_kernel,
+                            kernel_size=kernel_size,
+                            max_num_channels=max_num_channels).to(default_device())
+            
+            X_train = X[splits[0]]
+            mrf.fit(X_train)
+            X_feat = get_minirocket_features(X, mrf, chunksize=1024)
+
+            dls = get_ts_dls(X_feat, y, splits=splits)
+
+            model = build_ts_model(MiniRocketHead,c_out=torch.unique(y).numel(), dls=dls)
 
         learn = Learner(dls, model, loss_func=LabelSmoothingCrossEntropyFlat(), metrics=accuracy)
 
         with ContextManagers([learn.no_logging(), learn.no_bar()]): # [Optional] this prevents fastai from printing anything during training
-            learn.fit_one_cycle(15, lr_max=learning_rate)
+            learn.fit_one_cycle(n_epochs, lr_max=learning_rate)
 
         # Get the validation accuracy of the last epoch
         val_accuracy = learn.recorder.values[-1][2]
@@ -153,6 +172,19 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int):
                 'val_accuracy': val_accuracy,
                 'time': training_time
             }
+        if model_type == 'mini_rocket':
+            trial_results = {
+                'model': model_type,
+                'seq_length': seq_length,
+                'num_features': num_features,
+                'max_dilations_per_kernel':max_dilations_per_kernel,
+                'kernel_size':kernel_size,
+                'max_num_channels':max_num_channels,
+                'learning_rate': learning_rate,
+                'val_accuracy': val_accuracy,
+                'time': training_time
+            }
+
         
 
         # Append the results to the dataframe 
@@ -185,3 +217,102 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int):
     # Save the results DataFrame to a CSV file
     results_df_path = f"models/{model_type}/{model_type}_hyperparameters_results.csv"
     results_df.to_csv(results_df_path, index=False)
+
+
+def optimize_data_classification(df, dataset, timestep, epochs, trials):
+    
+    def objective(trial:optuna.Trial):
+        
+        seq_length = trial.suggest_int('seq_length',3, 50) # Add seq_length as a hyperparameter with appropriate values
+        lag = trial.suggest_int('lag',1, 5) # Add seq_length as a hyperparameter with appropriate values
+        buckets = trial.suggest_int('buckets',1,15)
+        
+        dif_all = trial.suggest_categorical('dif_all',[True, False])
+        TI = trial.suggest_categorical('TI',[True, False])
+        index = trial.suggest_categorical('index',[None, timestep])
+
+
+        batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128, 256]) # Add batch size as a hyperparameter with appropriate values
+
+        # Changes the data into features and labels with the split used later in TSAI for modelling
+        data_train, data_test, _ = preprocessing(df = df, lag = lag, sequence_length = seq_length, dif_all = dif_all, TSAI = True, CLF = True, index=index, TI = TI, data=dataset, buckets=buckets) 
+        
+        X, y, splits = combine_split_data([data_train[0], data_test[0]],[data_train[1], data_test[1]])
+
+        # Utilizes the GPU if possible
+        if torch.cuda.is_available(): X, y = X.cuda(), y.cuda()
+
+        # Load the data into dataloaders
+        dsets = TSDatasets(X, y, splits=splits)
+        dls = TSDataLoaders.from_dsets(dsets.train, dsets.valid, bs=batch_size)
+        
+        # Initialize the LSTMPlus model
+        nr_features = X.shape[1] # Number of features
+        nr_labels = torch.unique(y).numel() # Number of labels
+
+        
+        model = LSTMPlus(c_in=nr_features, c_out = nr_labels)
+
+        learn = Learner(dls, model, loss_func=LabelSmoothingCrossEntropyFlat(), metrics=[accuracy])
+
+        with ContextManagers([learn.no_logging(), learn.no_bar()]): # [Optional] this prevents fastai from printing anything during training
+            learn.fit_one_cycle(epochs, lr_max=0.001)
+
+        bin_accuracy = get_binary_accuracy_clf(learn, X[splits[1]], y[splits[1]], buckets)
+
+        return bin_accuracy
+
+    study = optuna.create_study(direction='maximize')
+    study.optimize(objective, n_trials=trials)
+
+
+def optimize_data_regression(df, dataset, timestep, epochs, trials):
+    
+    def objective(trial:optuna.Trial):
+        
+        seq_length = trial.suggest_int('seq_length',3, 50) # Add seq_length as a hyperparameter with appropriate values
+        lag = trial.suggest_int('lag',1, 5) # Add seq_length as a hyperparameter with appropriate values
+        dif_all = trial.suggest_categorical('dif_all',[True, False])
+        TI = trial.suggest_categorical('TI',[True, False])
+        index = trial.suggest_categorical('index',[None, timestep])
+        batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128, 256]) # Add batch size as a hyperparameter with appropriate values
+
+        # Changes the data into features and labels with the split used later in TSAI for modelling
+        data_train, data_test, _ = preprocessing(df = df, lag = lag, sequence_length = seq_length, dif_all = dif_all, TSAI = True, CLF = False, index=index, TI = TI, data=dataset) 
+        
+        X, y, splits = combine_split_data([data_train[0], data_test[0]],[data_train[1], data_test[1]])
+
+        # Utilizes the GPU if possible
+        if torch.cuda.is_available(): X, y = X.cuda(), y.cuda()
+
+        # Load the data into dataloaders
+        dls = get_ts_dls(X, y, splits=splits, bs=batch_size)
+
+        learn = ts_learner(dls, LSTMPlus,metrics=[mae, rmse])
+
+        with ContextManagers([learn.no_logging(), learn.no_bar()]): # [Optional] this prevents fastai from printing anything during training
+            learn.fit_one_cycle(epochs, lr_max=0.01)
+
+        bin_accuracy = get_binary_accuracy_reg(learn, X[splits[1]], y[splits[1]])
+        return bin_accuracy #
+
+    study = optuna.create_study(direction='maximize')
+    study.optimize(objective, n_trials=trials)
+
+def get_binary_accuracy_clf(learner,X_test,y_test,buckets):
+    preds, _, y_preds = learner.get_X_preds(X_test)
+
+    test_binary = [-1 if y < buckets else 1 for y in y_test]
+    pred_binary = [-1 if y < buckets else 1 for y in y_preds]
+
+    accuracy = sum(y1 * y2 > 0 for y1, y2 in zip(pred_binary, test_binary))/len(pred_binary)
+    return accuracy
+
+def get_binary_accuracy_reg(learner,X_test, y_test):
+    preds, _, y_preds = learner.get_X_preds(X_test)
+
+    test_y_converted = [1 if  y_test[i] >  y_test[i-1] else -1 for i in range(len(y_test))]
+    preds_y_converted = [1 if y_preds[i][0] > y_preds[i-1][0] else -1 for i in range(len(y_preds))]
+
+    accuracy = sum(y1 * y2 > 0 for y1, y2 in zip(preds_y_converted, test_y_converted))/len(preds_y_converted)
+    return accuracy
