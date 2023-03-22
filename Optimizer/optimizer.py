@@ -7,6 +7,8 @@ import json
 from Preprocessing.preprocessing import preprocessing
 from tsai.all import *
 
+#Add trial bar, early stoppage
+
 def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15):
 
     # Load or create a new results DataFrame
@@ -21,7 +23,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         if model_type == 'tst_class': results_df = pd.DataFrame(columns=['model', 'seq_length', 'd_model', 'n_layers', 'n_heads', 'd_ff', 'dropout', 'learning_rate', 'val_accuracy', 'time'])
     
     def objective(trial:optuna.Trial):
-        
+        #Fix sequence length
         seq_length = trial.suggest_categorical('seq_length', [50, 100, 150, 200, 250, 300]) # Add seq_length as a hyperparameter with appropriate values
         batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128, 256]) # Add batch size as a hyperparameter with appropriate values
         learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-2, log=True)  # search through all float values between 1e-6 and 1e-2 in log increment steps
@@ -89,9 +91,6 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
             nr_features = X.shape[1] # Number of features
             nr_labels = torch.unique(y).numel() # Number of labels
             seq_len = X.shape[2] # Sequence length
-            print(seq_length)
-            print(seq_len)
-            print(X.shape)
             start = time.time()
             model = TSTPlus(c_in=nr_features,
                             c_out=nr_labels,
@@ -231,6 +230,7 @@ def optimize_data_classification(df, dataset, timestep, epochs, trials):
         TI = trial.suggest_categorical('TI',[True, False])
         index = trial.suggest_categorical('index',[None, timestep])
 
+        #Exlude features?
 
         batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128, 256]) # Add batch size as a hyperparameter with appropriate values
 
@@ -265,7 +265,7 @@ def optimize_data_classification(df, dataset, timestep, epochs, trials):
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=trials)
 
-
+# Add so that it saves as, Add option to send in other model
 def optimize_data_regression(df, dataset, timestep, epochs, trials):
     
     def objective(trial:optuna.Trial):
@@ -288,7 +288,7 @@ def optimize_data_regression(df, dataset, timestep, epochs, trials):
         # Load the data into dataloaders
         dls = get_ts_dls(X, y, splits=splits, bs=batch_size)
 
-        learn = ts_learner(dls, LSTMPlus,metrics=[mae, rmse])
+        learn = ts_learner(dls, LSTMPlus,metrics=[mae, rmse]) 
 
         with ContextManagers([learn.no_logging(), learn.no_bar()]): # [Optional] this prevents fastai from printing anything during training
             learn.fit_one_cycle(epochs, lr_max=0.01)
