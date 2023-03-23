@@ -5,12 +5,21 @@ from sklearn.metrics import mean_squared_error
 
 
 #Calculates a simpel pesudo return by "buying" if the prediction is 1, and keeping it for "lag" time periods before selling
+#Add plots immediately
+def calculate_pseudo_return(learner, X, y, splits, df, lag, sequence_length, TI, CLF, buckets = -1, transaction_cost=0):
+    
+    test_x = X[splits[1]] 
+    preds, _, y_preds = learner.get_X_preds(test_x)
 
-def calculate_pseudo_return(lag, sequence_length, splits, df, predictions, transaction_cost):
-    prices = list(df[sequence_length:-lag]['close'][splits[1]])
+    predictions = [1 if y_preds[i][0] > y_preds[i-1][0] else -1 for i in range(len(y_preds))] if CLF else [-1 if y < buckets else 1 for y in y_preds]
+    
+    TI_index = 23 if TI else 0
+ 
+    prices = list(df[sequence_length+TI_index:-lag]['close'][splits[1]])
+
     investment = 1000
     returns = []
-    for i in range(len(predictions)):
+    for i in range(len(predictions)-lag):
         if predictions[i] == 1: #if up, we buy
             buy_price = prices[i]
             sell_price = prices[i+lag]
@@ -22,7 +31,15 @@ def calculate_pseudo_return(lag, sequence_length, splits, df, predictions, trans
             returns.append(0)
     cumulative_return = sum(returns)
     total_return = cumulative_return / investment
-    return total_return, investment, returns
+
+    roi = [sum(returns[:i+1]) for i in range(len(returns))]
+    plt.plot(roi)
+    plt.title("Cumulative returns at various timesteps, total return: "+"{:.2%}".format(total_return))
+    plt.ylabel("P/L (USD)")
+    plt.xlabel("Timestep")
+    plt.show()
+
+    return total_return, investment, returns 
 
 #Plots the actual vs predict curves, as well as an "up-down" confusion matrix
 def get_plots_regression(learner, X, y, splits):
