@@ -6,8 +6,7 @@ import torch
 import json
 from Preprocessing.preprocessing import preprocessing
 from tsai.all import *
-
-#Add trial bar, early stoppage
+from fastai.callback.tracker import EarlyStoppingCallback
 
 def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15):
 
@@ -18,18 +17,19 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
     if os.path.exists(results_file):
         results_df = pd.read_csv(results_file)
     else:
-        if model_type == 'lstm_fcn_class': results_df = pd.DataFrame(columns=['model', 'seq_length', 'batch_size', 'hidden_size', 'rnn_layers', 'rnn_dropout', 'fc_dropout', 'learning_rate', 'conv_layers', 'kss', 'val_accuracy', 'time'])
-        if model_type == 'lstm_class': results_df = pd.DataFrame(columns=['model', 'seq_length', 'hidden_size', 'n_layers', 'rnn_dropout', 'fc_dropout', 'learning_rate', 'val_accuracy', 'time'])
-        if model_type == 'tst_class': results_df = pd.DataFrame(columns=['model', 'seq_length', 'd_model', 'n_layers', 'n_heads', 'd_ff', 'dropout', 'learning_rate', 'val_accuracy', 'time'])
+        if model_type == 'lstm_fcn_class': results_df = pd.DataFrame(columns=['model', 'df_len', 'epochs', 'seq_length', 'batch_size', 'hidden_size', 'rnn_layers', 'rnn_dropout', 'fc_dropout', 'learning_rate', 'conv_layers', 'kss', 'val_accuracy', 'time'])
+        if model_type == 'lstm_class': results_df = pd.DataFrame(columns=['model', 'df_len', 'epochs', 'seq_length', 'hidden_size', 'n_layers', 'rnn_dropout', 'fc_dropout', 'learning_rate', 'val_accuracy', 'time'])
+        if model_type == 'tst_class': results_df = pd.DataFrame(columns=['model', 'df_len', 'epochs', 'seq_length', 'd_model', 'n_layers', 'n_heads', 'd_ff', 'dropout', 'learning_rate', 'val_accuracy', 'time'])
     
     def objective(trial:optuna.Trial):
-        #Fix sequence length
-        seq_length = trial.suggest_categorical('seq_length', [50, 100, 150, 200, 250, 300]) # Add seq_length as a hyperparameter with appropriate values
+       
+        seq_length = trial.suggest_int('seq_length',3, 50) # Add seq_length as a hyperparameter with appropriate values
         batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128, 256]) # Add batch size as a hyperparameter with appropriate values
         learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-2, log=True)  # search through all float values between 1e-6 and 1e-2 in log increment steps
 
         # Changes the data into features and labels with the split used later in TSAI for modelling
         data_train, data_test, _ = preprocessing(**preprocessing_params, sequence_length=seq_length)
+
         X, y, splits = combine_split_data([data_train[0], data_test[0]],[data_train[1], data_test[1]])
 
         # Utilizes the GPU if possible
@@ -51,7 +51,6 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
             nr_features = X.shape[1] # Number of features
             nr_labels = torch.unique(y).numel() # Number of labels
 
-            start = time.time()
             model =LSTM_FCNPlus(c_in=nr_features, 
                             c_out=nr_labels, 
                             hidden_size=hidden_size,
@@ -61,7 +60,6 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
                             conv_layers=conv_layers,
                             kss = kernel_sizes,
                             shuffle=False)
-            training_time = time.time() - start
         if model_type == 'lstm_class':
             hidden_size = trial.suggest_categorical('hidden_size', [25, 50, 100, 200])
             n_layers = trial.suggest_categorical('n_layers', [1, 2, 4, 8])
@@ -72,14 +70,12 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
             nr_features = X.shape[1] # Number of features
             nr_labels = torch.unique(y).numel() # Number of labels
 
-            start = time.time()
             model = LSTMPlus(c_in=nr_features, 
                         c_out=nr_labels, 
                         hidden_size=hidden_size,
                         n_layers=n_layers,
                         rnn_dropout= rnn_dropout,
                         fc_dropout=fc_dropout)
-            training_time = time.time() - start
         if model_type == 'tst_class':
             d_model = trial.suggest_categorical('d_model', [64, 128, 256, 512])
             n_layers = trial.suggest_categorical('n_layers', [1, 2, 4, 8])
@@ -91,7 +87,6 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
             nr_features = X.shape[1] # Number of features
             nr_labels = torch.unique(y).numel() # Number of labels
             seq_len = X.shape[2] # Sequence length
-            start = time.time()
             model = TSTPlus(c_in=nr_features,
                             c_out=nr_labels,
                             seq_len=seq_len,
@@ -100,7 +95,6 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
                             n_heads=n_heads,
                             d_ff=d_ff,
                             dropout=dropout)
-            training_time = time.time() - start
         if model_type == 'mini_rocket':
             num_features = trial.suggest_categorical('num_features', [1000,2500,5000,10000])
             max_dilations_per_kernel = trial.suggest_categorical('max_dilations_per_kernel', [8, 16, 32, 64])
@@ -122,10 +116,11 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
 
             model = build_ts_model(MiniRocketHead,c_out=torch.unique(y).numel(), dls=dls)
 
-        learn = Learner(dls, model, loss_func=LabelSmoothingCrossEntropyFlat(), metrics=accuracy)
-
+        learn = Learner(dls, model, loss_func=LabelSmoothingCrossEntropyFlat(), metrics=accuracy, cbs=[EarlyStoppingCallback(patience=3)])
+        start = time.time()
         with ContextManagers([learn.no_logging(), learn.no_bar()]): # [Optional] this prevents fastai from printing anything during training
             learn.fit_one_cycle(n_epochs, lr_max=learning_rate)
+        training_time = time.time() - start
 
         # Get the validation accuracy of the last epoch
         val_accuracy = learn.recorder.values[-1][2]
@@ -134,6 +129,8 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         if model_type == 'lstm_fcn_class':
             trial_results = {
                 'model': model_type,
+                'df_len': len(preprocessing_params['df']),
+                'epochs' : n_epochs,
                 'seq_length': seq_length,
                 'batch_size': batch_size,
                 'hidden_size': hidden_size,
@@ -149,6 +146,8 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         if model_type == 'lstm_class':
             trial_results = {
                 'model': model_type,
+                'df_len': len(preprocessing_params['df']),
+                'epochs' : n_epochs,
                 'seq_len': seq_length,
                 'hidden_size': hidden_size,
                 'n_layers': n_layers,
@@ -161,6 +160,8 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         if model_type == 'tst_class':
             trial_results = {
                 'model': model_type,
+                'df_len': len(preprocessing_params['df']),
+                'epochs' : n_epochs,
                 'seq_length': seq_length,
                 'd_model': d_model,
                 'n_layers': n_layers,
@@ -174,6 +175,8 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         if model_type == 'mini_rocket':
             trial_results = {
                 'model': model_type,
+                'df_len': len(preprocessing_params['df']),
+                'epochs' : n_epochs,
                 'seq_length': seq_length,
                 'num_features': num_features,
                 'max_dilations_per_kernel':max_dilations_per_kernel,
@@ -216,7 +219,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
     results_df.to_csv(results_df_path, index=False)
 
 
-def optimize_data_classification(df, dataset, timestep, epochs, trials, opt_model = 'undisclosed', seq_length = 10, lag = 1, data_name ='undisclosed'):
+def optimize_data_classification(df, dataset, timestep, epochs, trials, model_type = 'undisclosed', seq_length = 10, lag = 1, data_name ='undisclosed'):
     global data_results_df
     results_file = f"Optimizer/data_optimization/classifier_hyperparameters_results.csv"
     if os.path.exists(results_file):
@@ -259,8 +262,20 @@ def optimize_data_classification(df, dataset, timestep, epochs, trials, opt_mode
         # Initialize the LSTMPlus model
         nr_features = X.shape[1] # Number of features
         nr_labels = torch.unique(y).numel() # Number of labels
-        
-        model = LSTMPlus(c_in=nr_features, c_out = nr_labels)
+
+        if model_type == 'tst': model = TSTPlus(c_in=nr_features, c_out = nr_labels)
+        if model_type == 'lstm' or 'undisclosed': model = LSTMPlus(c_in=nr_features, c_out = nr_labels)
+        if model_type == 'lstm_fcn_': model = LSTM_FCNPlus(c_in=nr_features, c_out = nr_labels)
+        if model_type == 'mini_rocket': 
+            
+            mrf = MiniRocketFeaturesPlus(X.shape[1], X.shape[2]).to(default_device())
+            X_train = X[splits[0]]
+            mrf.fit(X_train)
+            X_feat = get_minirocket_features(X, mrf, chunksize=1024)
+            dls = get_ts_dls(X_feat, y, splits=splits)
+            model = build_ts_model(MiniRocketHead,c_out=torch.unique(y).numel(), dls=dls)
+
+
 
         learn = Learner(dls, model, loss_func=LabelSmoothingCrossEntropyFlat(), metrics=[accuracy])
 
@@ -272,7 +287,7 @@ def optimize_data_classification(df, dataset, timestep, epochs, trials, opt_mode
         trial_results = {
                 'dataset': data_name,
                 'data_size': len(X),
-                'model': opt_model,
+                'model': model_type,
                 'seq_length': seq_length,
                 'buckets': buckets,
                 'dif_all':dif_all,
@@ -301,7 +316,7 @@ def optimize_data_classification(df, dataset, timestep, epochs, trials, opt_mode
 
 
 # Add so that it saves as, Add option to send in other model
-def optimize_data_regression(df, dataset, timestep, epochs, trials, opt_model = 'undisclosed', seq_length = 10, lag = 1, data_name ='undisclosed'):
+def optimize_data_regression(df, dataset, timestep, epochs, trials, model_type = 'undisclosed', seq_length = 10, lag = 1, data_name ='undisclosed'):
     
     global data_results_df
     results_file = f"Optimizer/data_optimization/regression_hyperparameters_results.csv"
@@ -337,7 +352,18 @@ def optimize_data_regression(df, dataset, timestep, epochs, trials, opt_model = 
         # Load the data into dataloaders
         dls = get_ts_dls(X, y, splits=splits, bs=batch_size)
 
-        learn = ts_learner(dls, LSTMPlus ,metrics=[mae, rmse]) 
+        if model_type == 'tst': learn = ts_learner(dls, TSTPlus ,metrics=[mae, rmse]) 
+        if model_type == 'lstm' or 'undisclosed': learn = ts_learner(dls, LSTMPlus ,metrics=[mae, rmse]) 
+        if model_type == 'lstm_fcn_': learn = ts_learner(dls, LSTM_FCNPlus ,metrics=[mae, rmse]) 
+        if model_type == 'mini_rocket': 
+            
+            mrf = MiniRocketFeaturesPlus(X.shape[1], X.shape[2]).to(default_device())
+            X_train = X[splits[0]]
+            mrf.fit(X_train)
+            X_feat = get_minirocket_features(X, mrf, chunksize=1024)
+            dls = get_ts_dls(X_feat, y, splits=splits)
+            model = build_ts_model(MiniRocketHead,c_out=torch.unique(y).numel(), dls=dls)
+            learn = ts_learner(dls, model, metrics=[mae, rmse])
 
         with ContextManagers([learn.no_logging(), learn.no_bar()]): # [Optional] this prevents fastai from printing anything during training
             learn.fit_one_cycle(epochs, lr_max=0.01)
@@ -347,7 +373,7 @@ def optimize_data_regression(df, dataset, timestep, epochs, trials, opt_model = 
         trial_results = {
                 'dataset': data_name,
                 'data_size': len(X),
-                'model': opt_model,
+                'model': model_type,
                 'seq_length': seq_length,
                 'dif_all':dif_all,
                 'TI':TI,
