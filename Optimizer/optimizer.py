@@ -184,8 +184,6 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
                 'time': training_time
             }
 
-        
-
         # Append the results to the dataframe 
         global results_df
         results_df = results_df.append(trial_results, ignore_index=True)
@@ -218,14 +216,26 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
     results_df.to_csv(results_df_path, index=False)
 
 
-def optimize_data_classification(df, dataset, timestep, epochs, trials):
-    
+def optimize_data_classification(df, dataset, timestep, epochs, trials, opt_model = 'undisclosed', seq_length = 10, lag = 1, data_name ='undisclosed'):
+    global data_results_df
+    results_file = f"Optimizer/data_optimization/classifier_hyperparameters_results.csv"
+    if os.path.exists(results_file):
+        data_results_df = pd.read_csv(results_file)
+    else: 
+        data_results_df = pd.DataFrame(columns=[
+                'dataset',
+                'data_size',
+                'model',
+                'seq_length',
+                'buckets',
+                'dif_all',
+                'TI',
+                'index',
+                'bin_accuracy'])
+
     def objective(trial:optuna.Trial):
         
-        seq_length = trial.suggest_int('seq_length',3, 50) # Add seq_length as a hyperparameter with appropriate values
-        lag = trial.suggest_int('lag',1, 5) # Add seq_length as a hyperparameter with appropriate values
         buckets = trial.suggest_int('buckets',1,15)
-        
         dif_all = trial.suggest_categorical('dif_all',[True, False])
         TI = trial.suggest_categorical('TI',[True, False])
         index = trial.suggest_categorical('index',[None, timestep])
@@ -249,7 +259,6 @@ def optimize_data_classification(df, dataset, timestep, epochs, trials):
         # Initialize the LSTMPlus model
         nr_features = X.shape[1] # Number of features
         nr_labels = torch.unique(y).numel() # Number of labels
-
         
         model = LSTMPlus(c_in=nr_features, c_out = nr_labels)
 
@@ -260,18 +269,58 @@ def optimize_data_classification(df, dataset, timestep, epochs, trials):
 
         bin_accuracy = get_binary_accuracy_clf(learn, X[splits[1]], y[splits[1]], buckets)
 
+        trial_results = {
+                'dataset': data_name,
+                'data_size': len(X),
+                'model': opt_model,
+                'seq_length': seq_length,
+                'buckets': buckets,
+                'dif_all':dif_all,
+                'TI':TI,
+                'index':index,
+                'bin_accuracy': bin_accuracy
+            }
+
+        global data_results_df
+        data_results_df = data_results_df.append(trial_results, ignore_index=True)
+
         return bin_accuracy
 
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=trials)
 
+       # Save the best parameters
+    best_params = study.best_params
+    best_params_path = f"Optimizer/data_optimization/classifier_best_params.json"
+    with open(best_params_path, "w") as f:
+            json.dump(best_params, f)
+
+    # Save the results DataFrame to a CSV file
+    results_df_path = f"Optimizer/data_optimization/classifier_hyperparameters_results.csv"
+    data_results_df.to_csv(results_df_path, index=False)
+
+
 # Add so that it saves as, Add option to send in other model
-def optimize_data_regression(df, dataset, timestep, epochs, trials):
+def optimize_data_regression(df, dataset, timestep, epochs, trials, opt_model = 'undisclosed', seq_length = 10, lag = 1, data_name ='undisclosed'):
+    
+    global data_results_df
+    results_file = f"Optimizer/data_optimization/regression_hyperparameters_results.csv"
+    if os.path.exists(results_file):
+        data_results_df = pd.read_csv(results_file)
+    else: 
+        data_results_df = pd.DataFrame(columns=[
+                'dataset',
+                'data_size',
+                'model',
+                'seq_length',
+                'dif_all',
+                'TI',
+                'index',
+                'bin_accuracy'])
+    
     
     def objective(trial:optuna.Trial):
         
-        seq_length = trial.suggest_int('seq_length',3, 50) # Add seq_length as a hyperparameter with appropriate values
-        lag = trial.suggest_int('lag',1, 5) # Add seq_length as a hyperparameter with appropriate values
         dif_all = trial.suggest_categorical('dif_all',[True, False])
         TI = trial.suggest_categorical('TI',[True, False])
         index = trial.suggest_categorical('index',[None, timestep])
@@ -288,16 +337,41 @@ def optimize_data_regression(df, dataset, timestep, epochs, trials):
         # Load the data into dataloaders
         dls = get_ts_dls(X, y, splits=splits, bs=batch_size)
 
-        learn = ts_learner(dls, LSTMPlus,metrics=[mae, rmse]) 
+        learn = ts_learner(dls, LSTMPlus ,metrics=[mae, rmse]) 
 
         with ContextManagers([learn.no_logging(), learn.no_bar()]): # [Optional] this prevents fastai from printing anything during training
             learn.fit_one_cycle(epochs, lr_max=0.01)
 
         bin_accuracy = get_binary_accuracy_reg(learn, X[splits[1]], y[splits[1]])
+
+        trial_results = {
+                'dataset': data_name,
+                'data_size': len(X),
+                'model': opt_model,
+                'seq_length': seq_length,
+                'dif_all':dif_all,
+                'TI':TI,
+                'index':index,
+                'bin_accuracy': bin_accuracy
+            }
+
+        global data_results_df
+        data_results_df = data_results_df.append(trial_results, ignore_index=True)
+        
         return bin_accuracy #
 
     study = optuna.create_study(direction='maximize')
     study.optimize(objective, n_trials=trials)
+
+    # Save the best parameters
+    best_params = study.best_params
+    best_params_path = f"Optimizer/data_optimization/regression_best_params.json"
+    with open(best_params_path, "w") as f:
+            json.dump(best_params, f)
+
+    # Save the results DataFrame to a CSV file
+    results_df_path = f"Optimizer/data_optimization/regression_hyperparameters_results.csv"
+    data_results_df.to_csv(results_df_path, index=False)
 
 def get_binary_accuracy_clf(learner,X_test,y_test,buckets):
     preds, _, y_preds = learner.get_X_preds(X_test)

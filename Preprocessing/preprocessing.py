@@ -37,17 +37,17 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
     # Check for NaN values
     if df.isnull().values.any():
         print("Error in dataframe, missing value")
-
+    print("after null"+str(len(df)))
     # Calculates the change in close price to use for classification
 
     if CLF: change = (df['close'] - df['close'].shift(lag)).dropna().reset_index(drop=True)
     
     # Get price lag steps into the future
     else: change = df['close'][lag:].reset_index(drop=True)
-
+    
     # Calculates the difference in columns if set to true
     df = df.diff().dropna() if dif_all else df[1:]
-
+    
     #Assign week and day after, since they are features rather than timeseries, and hence shouldnt' be differenced
     df = df.assign(change = change, weekday = weekday, hour = hour )
 
@@ -83,6 +83,8 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
     df_scaled = pd.DataFrame(scaler.transform(df), index = df.index, columns = df.columns)
 
     if CLF:
+        print(len(df_scaled))
+        print(len(df))
         df_scaled['change'] = df['change']
 
         # Create a new dataframe for info
@@ -161,6 +163,6 @@ def add_TI(df):
         df['bb_bbli'] = indicator_bb.bollinger_lband_indicator()
 
         #Volume --> Chaikin Money Flow
-        df['CMF'] = ChaikinMoneyFlowIndicator(high=df["high"], low = df["low"], close = df["close"], volume=df["volume"], window=20).chaikin_money_flow()
+        #df['CMF'] = ChaikinMoneyFlowIndicator(high=df["high"], low = df["low"], close = df["close"], volume=df["volume"], window=20).chaikin_money_flow()
 
         return df
