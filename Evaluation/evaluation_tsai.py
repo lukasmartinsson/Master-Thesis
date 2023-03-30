@@ -59,9 +59,21 @@ def get_plots_regression(learner, X, y, splits):
     plt.title('Total accuracy: '+str(accuracy))
     plt.show()
 
+    # Calculate the cumulative accuracy at each step
+    accuracies = []
+    for i in range(len(preds_y_converted)):
+        accuracy = sum(y1 * y2 > 0 for y1, y2 in zip(preds_y_converted[:i+1], test_y_converted[:i+1])) / (i+1)
+        accuracies.append(accuracy)
+
+    # Plot the accuracies against the step numbers
+    plt.plot(range(1, len(accuracies)+1), accuracies)
+    plt.xlabel('Step')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy at different steps')
+    plt.show()
+
     #Plot regression line
     fig, ax = plt.subplots(figsize=(10, 5))
-
     ax.plot(y_preds_list, label='Prediction')
     ax.plot(test_y, label='Actual')
 
@@ -89,6 +101,19 @@ def get_plots_classification(learner, X, y, splits, buckets):
 
     accuracy = sum(y1 * y2 > 0 for y1, y2 in zip(pred_binary, test_binary))/len(pred_binary)
 
+     # Calculate the cumulative accuracy at each step
+    accuracies = []
+    for i in range(len(pred_binary)):
+        accuracy = sum(y1 * y2 > 0 for y1, y2 in zip(pred_binary[:i+1], test_binary[:i+1])) / (i+1)
+        accuracies.append(accuracy)
+
+    # Plot the accuracies against the step numbers
+    plt.plot(range(1, len(accuracies)+1), accuracies)
+    plt.xlabel('Step')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy at different steps')
+    plt.show()
+
     ConfusionMatrixDisplay.from_predictions(test_y, y_preds, display_labels=range(2*buckets), normalize = 'true')
     plt.title('Actual classification, Total accuracy: '+str(accuracy))
     plt.show()
@@ -99,4 +124,13 @@ def get_plots_classification(learner, X, y, splits, buckets):
 
     plt.hist(y_preds)
     plt.title('Histogram of predictions')
+    plt.show()
+
+    predictions = ([1 if y1 * y2 > 0 else -1 for y1, y2 in zip(pred_binary, test_binary)])
+    #steps = int(len(predictions) / 10)
+    #predictions = [sum(x for x in predictions[i:i+steps] if x == 1)/steps for i in range(0, len(predictions), steps)]
+    cumulative_sum = [sum(predictions[i-1:i]/i) for i in range(1, len(predictions)+1)]
+
+    plt.plot(cumulative_sum)
+    plt.title('Accuracy over time')
     plt.show()
