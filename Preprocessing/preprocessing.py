@@ -30,6 +30,8 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
         time_data = pd.to_datetime(df['datetime'])
         df = df.drop(['datetime'], axis=1)
 
+    
+
     # Extract week and day
     weekday = time_data.dt.weekday.values[1:]
     hour = time_data.dt.hour.values[1:]
@@ -37,7 +39,8 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
     # Check for NaN values
     if df.isnull().values.any():
         print("Error in dataframe, missing value")
-    print("after null"+str(len(df)))
+        print(df.dropna(how='all').dropna(how='all', axis=1))
+
     # Calculates the change in close price to use for classification
 
     if CLF: change = (df['close'] - df['close'].shift(lag)).dropna().reset_index(drop=True)
@@ -53,6 +56,7 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
 
     #Shift function goes backwards, we wont have the "real" results for the last "lag" instances
     df = df[:-lag]
+
 
     #Need to be before split to ensure that buckets have the same range
     if CLF: 
@@ -83,9 +87,8 @@ def preprocessing(df: pd.DataFrame, lag:int = 1, sequence_length:int = 128, dif_
     df_scaled = pd.DataFrame(scaler.transform(df), index = df.index, columns = df.columns)
 
     if CLF:
-        print(len(df_scaled))
-        print(len(df))
         df_scaled['change'] = df['change']
+        
 
         # Create a new dataframe for info
         df_info = pd.DataFrame({'Label': df['change'].value_counts().sort_index(ascending=True).index, 
@@ -146,13 +149,13 @@ def create_sequences_2(df: pd.DataFrame, prediction: str, sequence_length: int):
 
 def add_TI(df):
         #Moving Average Convergence Divergence --> Trend
-        indicator_MACD = MACD(close=df["close"], window_slow= 20, window_fast= 10, window_sign= 5)
+        indicator_MACD = MACD(close=df["close"], window_slow= 26, window_fast= 12, window_sign= 9)
         df['MACD_line'] = indicator_MACD.macd()
         df['MACD_diff'] = indicator_MACD.macd_diff()
         df['MACD_signal'] = indicator_MACD.macd_signal()
 
         #Relative strength index --> Momentum
-        df['RSI'] = RSIIndicator(close=df["close"],window=20).rsi()
+        df['RSI'] = RSIIndicator(close=df["close"],window=14).rsi()
 
         #Bollinger bands --> Volatility
         indicator_bb = BollingerBands(close=df["close"], window=20, window_dev=2)
