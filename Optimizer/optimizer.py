@@ -320,11 +320,11 @@ def optimize_data_classification(model_type: str, preprocessing_params: dict, n_
             lag = trial.suggest_categorical('lag',[1])
 
         dif_all = trial.suggest_categorical('dif_all',[True, False])
-        train_size = trial.suggest_categorical('train_size',[0.95, 0.975, 0.99])
+        train_size = 0.95 # trial.suggest_categorical('train_size',[0.95, 0.975, 0.99])
         index_test = trial.suggest_categorical('index',[None, index])
         preprocessing_params.pop('index', None)
 
-        buckets = None
+        buckets = 'None'
         if CLF:
             buckets = trial.suggest_categorical('buckets',[1,3,5,10,15])
         
