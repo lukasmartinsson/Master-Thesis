@@ -324,7 +324,10 @@ def optimize_data_classification(model_type: str, preprocessing_params: dict, n_
         index_test = trial.suggest_categorical('index',[None, index])
         preprocessing_params.pop('index', None)
 
-        buckets = trial.suggest_categorical('buckets',[1,3,5,10,15])
+        buckets = None
+        if CLF:
+            buckets = trial.suggest_categorical('buckets',[1,3,5,10,15])
+        
         TI = trial.suggest_categorical('TI',[True, False])
 
         # Changes the data into features and labels with the split used later in TSAI for modelling
@@ -392,7 +395,7 @@ def optimize_data_classification(model_type: str, preprocessing_params: dict, n_
                 'lag': lag,
                 'dif_all': dif_all,
                 'train_size': train_size,
-                'index':index,
+                'index':index_test,
                 'buckets':buckets,
                 'TI':TI,
                 'bin_accuracy': acc
