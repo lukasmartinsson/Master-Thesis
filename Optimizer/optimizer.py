@@ -8,11 +8,13 @@ from Preprocessing.preprocessing import preprocessing
 from tsai.all import *
 from fastai.callback.tracker import EarlyStoppingCallback
 
-def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15, CLF: bool = True):
+def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15):
 
     # Load or create a new results DataFrame
     global results_df
     
+    CLF = preprocessing_params['CLF']
+
     results_file = f"models/{model_type}/{model_type}_hyperparameters_results.csv"
     if os.path.exists(results_file):
         results_df = pd.read_csv(results_file)
@@ -283,9 +285,9 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
     study_name = f"{model_type}_study"
     storage_name = f"sqlite:///models/{model_type}/{study_name}.db"
     if os.path.exists(f"models/{model_type}/{study_name}.db"):
-        study = optuna.load_study(study_name=study_name, storage=storage_name)
+        study = optuna.load_study(study_name=study_name, storage=storage_name, gc_after_trial=True)
     else:
-        study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize')# if CLF else "minimize")
+        study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize', gc_after_trial=True) # if CLF else "minimize")
         
     study.optimize(objective, n_trials=n_trials)
 
@@ -296,40 +298,45 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
             json.dump(best_params, f)
 
 
+def optimize_data_classification(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15, batch_size: int = 32, learning_rate: int = 0.001, index : str = None):
 
-def optimize_data_classification(df, timestep, epochs, trials, test_size, model_type = 'undisclosed', seq_length = 10, lag = 1, dataset ='undisclosed'):
-    global data_results_df
-    results_file = f"Optimizer/data_optimization/classifier_hyperparameters_results.csv"
+    global results_df
+    
+    CLF = preprocessing_params['CLF']
+    
+    results_file = f"Optimizer/data_optimization/{model_type}_hyperparameters_results.csv"
     if os.path.exists(results_file):
-        data_results_df = pd.read_csv(results_file)
+        results_df = pd.read_csv(results_file)
     else: 
-        data_results_df = pd.DataFrame(columns=[
-                'dataset',
-                'timestep',
-                'data_size',
-                'model',
-                'seq_length',
-                'buckets',
-                'dif_all',
-                'TI',
-                'index',
-                'bin_accuracy'])
+        results_df = pd.DataFrame(columns=['model','df_len', 'epochs', 'lag', 'dif_all', 'train_size', 'index', 'buckets', 'TI', 'bin_accuracy'])
 
     def objective(trial:optuna.Trial):
         
-        buckets = trial.suggest_int('buckets',1,15)
+        if index == '1min': 
+            lag = trial.suggest_categorical('lag',[1,5,15])
+        elif index == '5min': 
+            lag = trial.suggest_categorical('lag',[1,3])
+        else:
+            lag = trial.suggest_categorical('lag',[1])
+
         dif_all = trial.suggest_categorical('dif_all',[True, False])
+        train_size = trial.suggest_categorical('train_size',[0.95, 0.975, 0.99])
+        index_test = trial.suggest_categorical('index',[None, index])
+        preprocessing_params.pop('index', None)
+
+        buckets = trial.suggest_categorical('buckets',[1,3,5,10,15])
         TI = trial.suggest_categorical('TI',[True, False])
-        index = trial.suggest_categorical('index',[None, timestep])
-
-        #Exlude features?
-
-        batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128, 256]) # Add batch size as a hyperparameter with appropriate values
 
         # Changes the data into features and labels with the split used later in TSAI for modelling
-        data_train, data_test, _ = preprocessing(df = df, lag = lag, sequence_length = seq_length, dif_all = dif_all, TSAI = True, CLF = True, index=index, TI = TI, data=dataset, buckets=buckets) 
-        
-        X, y, splits = combine_split_data([data_train[0], data_test[0][:test_size]],[data_train[1], data_test[1][:test_size]])
+        data_train, data_test, _ = preprocessing(**preprocessing_params, 
+                                                 lag = lag, 
+                                                 dif_all = dif_all, 
+                                                 train_size = train_size,
+                                                 index = index_test,
+                                                 buckets = buckets,
+                                                 TI = TI)
+
+        X, y, splits = combine_split_data([data_train[0], data_test[0]],[data_train[1], data_test[1]])
         
         #Convert to long
         y=y.long()
@@ -337,156 +344,75 @@ def optimize_data_classification(df, timestep, epochs, trials, test_size, model_
         # Utilizes the GPU if possible
         if torch.cuda.is_available(): X, y = X.cuda(), y.cuda()
         
-        # Load the data into dataloaders
-        dsets = TSDatasets(X, y, splits=splits)
-        dls = TSDataLoaders.from_dsets(dsets.train, dsets.valid, bs=batch_size)
+        if CLF:
+            # Load the data into dataloaders
+            dsets = TSDatasets(X, y, splits=splits)
+            dls = TSDataLoaders.from_dsets(dsets.train, dsets.valid, bs=batch_size)
+        else: 
+            dls = get_ts_dls(X, y, splits=splits, bs=batch_size)
         
         # Initialize the LSTMPlus model
         nr_features = X.shape[1] # Number of features
-        nr_labels = torch.unique(y).numel() # Number of labels
+        nr_labels = torch.unique(y).numel() if CLF else 1 # Number of labels
 
-        if model_type == 'tst': model = TSTPlus(c_in=nr_features, c_out = nr_labels, seq_len = seq_length)
-        if model_type == 'lstm' or 'undisclosed': model = LSTMPlus(c_in=nr_features, c_out = nr_labels)
-        if model_type == 'lstm_fcn_': model = LSTM_FCNPlus(c_in=nr_features, c_out = nr_labels)
+        if model_type == 'tst_class' or model_type == 'tst_reg': model = TSTPlus(c_in=nr_features, c_out = nr_labels, seq_len = preprocessing_params['sequence_length'])
+        
+        if model_type == 'lstm_class' or model_type == 'lstm_reg': model = LSTMPlus(c_in=nr_features, c_out = nr_labels)
+       
+        if model_type == 'lstm_fcn_class' or model_type == 'lstm_fcn_reg': model = LSTM_FCNPlus(c_in=nr_features, c_out = nr_labels)
+       
         if model_type == 'mini_rocket': 
-            
             mrf = MiniRocketFeaturesPlus(X.shape[1], X.shape[2]).to(default_device())
             X_train = X[splits[0]]
             mrf.fit(X_train)
             X_feat = get_minirocket_features(X, mrf, chunksize=1024)
             dls = get_ts_dls(X_feat, y, splits=splits)
             model = build_ts_model(MiniRocketHead,c_out=torch.unique(y).numel(), dls=dls)
-
             X = X_feat
 
-        learn = Learner(dls, model, loss_func=CrossEntropyLossFlat(), metrics=[accuracy], cbs=[EarlyStoppingCallback(patience=3)])
+        if CLF: 
+            learn = Learner(dls, model, loss_func=LabelSmoothingCrossEntropyFlat(), metrics=accuracy, cbs=[EarlyStoppingCallback(patience=5)])
+        else:
+            learn = ts_learner(dls, model, metrics=[rmse, mae], cbs=[EarlyStoppingCallback(patience=5)])
 
         with ContextManagers([learn.no_logging(), learn.no_bar()]): # [Optional] this prevents fastai from printing anything during training
-            learn.fit_one_cycle(epochs, lr_max=0.001)
+            learn.fit_one_cycle(n_epochs, lr_max=learning_rate)
 
-        val_accuracy = learn.recorder.values[-1][1]
-
-        bin_accuracy = get_binary_accuracy_clf(learn, X[splits[1]], y[splits[1]], buckets)
-
-        print(bin_accuracy)
-
+        if CLF: 
+            acc = get_binary_accuracy_clf(learn, data_test[0], data_test[1], preprocessing_params['buckets'])
+            #val_accuracy = learn.recorder.values[-1][2]
+        else:
+            acc = get_binary_accuracy_reg(learn, data_test[0], data_test[1])
+            #val_mae = learn.recorder.values[-1][2]
+        
         trial_results = {
-                'dataset': dataset,
-                'timestep':timestep,
-                'data_size': len(X),
                 'model': model_type,
-                'seq_length': seq_length,
-                'buckets': buckets,
-                'dif_all':dif_all,
-                'TI':TI,
+                'df_len':len(preprocessing_params['df']),
+                'epochs': n_epochs,
+                'lag': lag,
+                'dif_all': dif_all,
+                'train_size': train_size,
                 'index':index,
-                'bin_accuracy': bin_accuracy
+                'buckets':buckets,
+                'TI':TI,
+                'bin_accuracy': acc
             }
+        
+        # Append the results to the dataframe 
+        global results_df
 
-        global data_results_df
-        data_results_df = data_results_df.append(trial_results, ignore_index=True)
-        results_df_path = f"Optimizer/data_optimization/classifier_hyperparameters_results.csv"
-        data_results_df.to_csv(results_df_path, index=False)
-
-        return bin_accuracy#val_accuracy
+        results_df = results_df.append(trial_results, ignore_index=True)
+        results_df.to_csv(results_file, index=False)
+        return acc
 
     study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=trials, gc_after_trial=True)
+    study.optimize(objective, n_trials=n_trials, gc_after_trial=True)
 
        # Save the best parameters
     best_params = study.best_params
     best_params_path = f"Optimizer/data_optimization/classifier_best_params.json"
     with open(best_params_path, "w") as f:
             json.dump(best_params, f)
-
-
-# Add so that it saves as, Add option to send in other model
-def optimize_data_regression(df, timestep, epochs, trials, model_type = 'undisclosed', seq_length = 10, lag = 1, dataset ='undisclosed'):
-    
-    global data_results_df
-    results_file = f"Optimizer/data_optimization/regression_hyperparameters_results.csv"
-    if os.path.exists(results_file):
-        data_results_df = pd.read_csv(results_file)
-    else: 
-        data_results_df = pd.DataFrame(columns=[
-                'dataset',
-                'data_size',
-                'model',
-                'seq_length',
-                'dif_all',
-                'TI',
-                'index',
-                'bin_accuracy'])
-    
-    
-    def objective(trial:optuna.Trial):
-        
-        dif_all = trial.suggest_categorical('dif_all',[True, False])
-        TI = trial.suggest_categorical('TI',[True, False])
-        index = trial.suggest_categorical('index',[None, timestep])
-        batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128, 256]) # Add batch size as a hyperparameter with appropriate values
-
-        # Changes the data into features and labels with the split used later in TSAI for modelling
-        data_train, data_test, _ = preprocessing(df = df, lag = lag, sequence_length = seq_length, dif_all = dif_all, TSAI = True, CLF = False, index=index, TI = TI, data=dataset) 
-        
-        X, y, splits = combine_split_data([data_train[0], data_test[0]],[data_train[1], data_test[1]])
-
-        # Utilizes the GPU if possible
-        if torch.cuda.is_available(): X, y = X.cuda(), y.cuda()
-
-        # Load the data into dataloaders
-        dls = get_ts_dls(X, y, splits=splits, bs=batch_size)
-
-        if model_type == 'tst': learn = ts_learner(dls, TSTPlus ,metrics=[mae, rmse], cbs=[EarlyStoppingCallback(patience=3)]) 
-        if model_type == 'lstm' or 'undisclosed': learn = ts_learner(dls, LSTMPlus ,metrics=[mae, rmse], cbs=[EarlyStoppingCallback(patience=3)]) 
-        if model_type == 'lstm_fcn_': learn = ts_learner(dls, LSTM_FCNPlus ,metrics=[mae, rmse], cbs=[EarlyStoppingCallback(patience=3)]) 
-        if model_type == 'mini_rocket': 
-            
-            mrf = MiniRocketFeaturesPlus(X.shape[1], X.shape[2]).to(default_device())
-            X_train = X[splits[0]]
-            mrf.fit(X_train)
-            X_feat = get_minirocket_features(X, mrf, chunksize=1024, to_np=True)
-            dls = get_ts_dls(X_feat, y, splits=splits, bs = batch_size)
-            model = build_ts_model(MiniRocketHead,c_out=torch.unique(y).numel(), dls=dls)
-            learn = ts_learner(dls, model, metrics=[mae, rmse], cbs=[EarlyStoppingCallback(patience=3)])
-
-            X = X_feat
-
-        with ContextManagers([learn.no_logging(), learn.no_bar()]): # [Optional] this prevents fastai from printing anything during training
-            learn.fit_one_cycle(epochs, lr_max=0.01)
-
-        val_loss = learn.recorder.values[-1][1]
-
-        bin_accuracy = get_binary_accuracy_reg(learn, X[splits[1]], y[splits[1]])
-
-        trial_results = {
-                'dataset': dataset,
-                'data_size': len(X),
-                'model': model_type,
-                'seq_length': seq_length,
-                'dif_all':dif_all,
-                'TI':TI,
-                'index':index,
-                'bin_accuracy': bin_accuracy
-            }
-
-        global data_results_df
-        data_results_df = data_results_df.append(trial_results, ignore_index=True)
-        results_df_path = f"Optimizer/data_optimization/regression_hyperparameters_results.csv"
-        data_results_df.to_csv(results_df_path, index=False)
-        
-        return bin_accuracy
-
-    study = optuna.create_study(direction='maximize')
-    study.optimize(objective, n_trials=trials, gc_after_trial=True)
-
-    # Save the best parameters
-    best_params = study.best_params
-    best_params_path = f"Optimizer/data_optimization/regression_best_params.json"
-    with open(best_params_path, "w") as f:
-            json.dump(best_params, f)
-
-    
 
 def get_binary_accuracy_clf(learner,X_test,y_test,buckets):
     preds, _, y_preds = learner.get_X_preds(X_test)

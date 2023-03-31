@@ -1,6 +1,0 @@
-dataset,data_size,model,seq_length,dif_all,TI,index,bin_accuracy
-undisclosed,9966,5,10,True,True,,0.4704112337011033
-undisclosed,9966,5,10,True,True,1min,0.522567703109328
-undisclosed,9989,5,10,True,False,,0.4974974974974975
-undisclosed,9989,5,10,True,False,1min,0.5125125125125125
-undisclosed,9989,5,10,False,False,,0.46146146146146144
