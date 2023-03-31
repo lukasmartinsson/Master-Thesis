@@ -379,7 +379,7 @@ def optimize_data_classification(model_type: str, preprocessing_params: dict, n_
             learn.fit_one_cycle(n_epochs, lr_max=learning_rate)
 
         if CLF: 
-            acc = get_binary_accuracy_clf(learn, data_test[0], data_test[1], preprocessing_params['buckets'])
+            acc = get_binary_accuracy_clf(learn, data_test[0], data_test[1], buckets)
             #val_accuracy = learn.recorder.values[-1][2]
         else:
             acc = get_binary_accuracy_reg(learn, data_test[0], data_test[1])
@@ -401,8 +401,10 @@ def optimize_data_classification(model_type: str, preprocessing_params: dict, n_
         # Append the results to the dataframe 
         global results_df
 
+        # Save the results DataFrame to a CSV file
+        results_df_path = f"Optimizer/data_optimization/{model_type}_{index}_hyperparameters_results.csv"
         results_df = results_df.append(trial_results, ignore_index=True)
-        results_df.to_csv(results_file, index=False)
+        results_df.to_csv(results_df_path, index=False)
         return acc
 
     study = optuna.create_study(direction='maximize')
