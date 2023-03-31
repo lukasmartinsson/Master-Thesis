@@ -1,1 +1,1 @@
-{"buckets": 3, "dif_all": true, "TI": false, "index": "1min", "batch_size": 32}
+{"buckets": 12, "dif_all": false, "TI": true, "index": "15min", "batch_size": 128}
