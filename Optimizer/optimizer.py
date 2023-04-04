@@ -362,15 +362,18 @@ def optimize_data_classification(model_type: str, preprocessing_params: dict, n_
         
         if model_type == 'lstm_class' or model_type == 'lstm_reg': model = LSTMPlus(c_in=nr_features, c_out = nr_labels)
        
-        if model_type == 'lstm_fcn_class' or model_type == 'lstm_fcn_reg': model = LSTM_FCNPlus(c_in=nr_features, c_out = nr_labels)
+        if model_type == 'lstm_fcn_class' or model_type == 'lstm_fcn_reg': model = LSTM_FCNPlus(c_in=nr_features, c_out = nr_labels,seq_len = preprocessing_params['sequence_length'])
        
-        if model_type == 'mini_rocket': 
+        if model_type == 'mini_rocket_class' or model_type == 'mini_rocket_reg': 
             mrf = MiniRocketFeaturesPlus(X.shape[1], X.shape[2]).to(default_device())
             X_train = X[splits[0]]
             mrf.fit(X_train)
             X_feat = get_minirocket_features(X, mrf, chunksize=1024)
-            dls = get_ts_dls(X_feat, y, splits=splits)
-            model = build_ts_model(MiniRocketHead,c_out=torch.unique(y).numel(), dls=dls)
+            dls = get_ts_dls(X_feat, y, splits=splits, bs = batch_size)
+            if CLF:
+                model = build_ts_model(MiniRocketHead,c_out=torch.unique(y).numel(), dls=dls)
+            else:
+                model = build_ts_model(MiniRocketHead, dls=dls)
             X = X_feat
 
         if CLF: 
@@ -382,10 +385,10 @@ def optimize_data_classification(model_type: str, preprocessing_params: dict, n_
             learn.fit_one_cycle(n_epochs, lr_max=learning_rate)
 
         if CLF: 
-            acc = get_binary_accuracy_clf(learn, data_test[0], data_test[1], buckets)
+            acc = get_binary_accuracy_clf(learn, X[splits[1]], y[splits[1]], buckets)
             #val_accuracy = learn.recorder.values[-1][2]
         else:
-            acc = get_binary_accuracy_reg(learn, data_test[0], data_test[1])
+            acc = get_binary_accuracy_reg(learn, X[splits[1]], y[splits[1]])
             #val_mae = learn.recorder.values[-1][2]
         
         trial_results = {
