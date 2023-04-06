@@ -1,3 +1,0 @@
-model,seq_length,batch_size,hidden_size,rnn_layers,rnn_dropout,fc_dropout,learning_rate,conv_layers,kss,val_accuracy,time
-lstm_fcn_class,150,64,25,2,0.4,0.0,5.057269409942751e-05,"[256, 512, 256]","[7, 5, 3]",0.49714285135269165,0.015958070755004883
-lstm_fcn_class,200,32,200,8,0.1,0.0,0.000140828132659027,"[128, 256, 128]","[7, 5, 3]",0.49714285135269165,0.0249330997467041

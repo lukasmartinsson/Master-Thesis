@@ -8,14 +8,14 @@ from Preprocessing.preprocessing import preprocessing
 from tsai.all import *
 from fastai.callback.tracker import EarlyStoppingCallback
 
-def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15):
+def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15, folder : str = 'full'):
 
     # Load or create a new results DataFrame
     global results_df
     
     CLF = preprocessing_params['CLF']
 
-    results_file = f"models/{model_type}/{model_type}_hyperparameters_results.csv"
+    results_file = f"models/{model_type}/{folder}/{preprocessing_params['index']}/{model_type}_hyperparameters_results.csv"
     if os.path.exists(results_file):
         results_df = pd.read_csv(results_file)
     else:
@@ -39,7 +39,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         X, y, splits = combine_split_data([data_train[0], data_test[0]],[data_train[1], data_test[1]])
 
         # Utilizes the GPU if possible
-        #if torch.cuda.is_available(): X, y = X.cuda(), y.cuda()
+        if torch.cuda.is_available(): X, y = X.cuda(), y.cuda()
 
         if CLF:
             # Load the data into dataloaders
@@ -142,11 +142,11 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
 
         # Get the validation accuracy of the last epoch
         if CLF: 
-            acc = get_binary_accuracy_clf(learn, data_test[0], data_test[1], preprocessing_params['buckets'])
             val_accuracy = learn.recorder.values[-1][2]
+            acc = get_binary_accuracy_clf(learn, data_test[0], data_test[1], preprocessing_params['buckets'])
         else:
-            acc = get_binary_accuracy_reg(learn, data_test[0], data_test[1])
             val_mae = learn.recorder.values[-1][2]
+            acc = get_binary_accuracy_reg(learn, data_test[0], data_test[1])
 
         # Save the hyperparameters and validation accuracy in a dictionary
         if model_type == 'lstm_fcn_class':
@@ -272,39 +272,39 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         global results_df
 
         # Save the results DataFrame to a CSV file
-        results_df_path = f"models/{model_type}/{model_type}_hyperparameters_results.csv"
-        results_df.to_csv(results_df_path, index=False)
+        results_df = results_df.append(trial_results, ignore_index=True)
+        results_df.to_csv(results_file, index=False)
 
         # Return the validation accuracy value of the last epoch
         return acc
 
     # Create the necessary folders if they don't exist
-    os.makedirs(f"models/{model_type}", exist_ok=True)
+    os.makedirs(f"models/{model_type}/{folder}/{preprocessing_params['index']}", exist_ok=True)
 
     # Load or create a new study
     study_name = f"{model_type}_study"
-    storage_name = f"sqlite:///models/{model_type}/{study_name}.db"
-    if os.path.exists(f"models/{model_type}/{study_name}.db"):
-        study = optuna.load_study(study_name=study_name, storage=storage_name, gc_after_trial=True)
+    storage_name = f"sqlite:///models/{model_type}/{folder}/{preprocessing_params['index']}/{study_name}.db"
+    if os.path.exists(f"models/{model_type}/{folder}/{preprocessing_params['index']}/{study_name}.db"):
+        study = optuna.load_study(study_name=study_name, storage=storage_name)
     else:
-        study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize', gc_after_trial=True) # if CLF else "minimize")
+        study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize') # if CLF else "minimize")
         
     study.optimize(objective, n_trials=n_trials)
 
     # Save the best parameters
     best_params = study.best_params
-    best_params_path = f"models/{model_type}/{model_type}_best_params.json"
+    best_params_path = f"models/{model_type}/{folder}/{preprocessing_params['index']}/{model_type}_best_params.json"
     with open(best_params_path, "w") as f:
             json.dump(best_params, f)
 
 
-def optimize_data_classification(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15, batch_size: int = 32, learning_rate: int = 0.001, index : str = None):
+def optimize_data(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15, batch_size: int = 32, learning_rate: int = 0.001, index : str = None, folder : str = 'full'):
 
     global results_df
     
     CLF = preprocessing_params['CLF']
     
-    results_file = f"Optimizer/data_optimization/{model_type}_hyperparameters_results.csv"
+    results_file = f"Optimizer/data_optimization/{model_type}/{folder}/{model_type}_{index}_hyperparameters_results.csv"
     if os.path.exists(results_file):
         results_df = pd.read_csv(results_file)
     else: 
@@ -324,9 +324,10 @@ def optimize_data_classification(model_type: str, preprocessing_params: dict, n_
         index_test = trial.suggest_categorical('index',[None, index])
         preprocessing_params.pop('index', None)
 
-        buckets = 'None'
         if CLF:
             buckets = trial.suggest_categorical('buckets',[1,3,5,10,15])
+        else:
+            buckets = 'None'
         
         TI = trial.suggest_categorical('TI',[True, False])
 
@@ -382,11 +383,11 @@ def optimize_data_classification(model_type: str, preprocessing_params: dict, n_
             learn.fit_one_cycle(n_epochs, lr_max=learning_rate)
 
         if CLF: 
-            acc = get_binary_accuracy_clf(learn, data_test[0], data_test[1], buckets)
             #val_accuracy = learn.recorder.values[-1][2]
+            acc = get_binary_accuracy_clf(learn, data_test[0], data_test[1], buckets)
         else:
-            acc = get_binary_accuracy_reg(learn, data_test[0], data_test[1])
             #val_mae = learn.recorder.values[-1][2]
+            acc = get_binary_accuracy_reg(learn, data_test[0], data_test[1])
         
         trial_results = {
                 'model': model_type,
@@ -405,17 +406,25 @@ def optimize_data_classification(model_type: str, preprocessing_params: dict, n_
         global results_df
 
         # Save the results DataFrame to a CSV file
-        results_df_path = f"Optimizer/data_optimization/{model_type}_{index}_hyperparameters_results.csv"
         results_df = results_df.append(trial_results, ignore_index=True)
-        results_df.to_csv(results_df_path, index=False)
+        results_df.to_csv(results_file, index=False)
         return acc
 
-    study = optuna.create_study(direction='maximize')
+    # Create the necessary folders if they don't exist
+    os.makedirs(f"Optimizer/data_optimization/{model_type}/{folder}/{index}", exist_ok=True)
+
+    study_name = f"{model_type}_study"
+    storage_name = f"sqlite:///Optimizer/data_optimization/{model_type}/{folder}/{index}/{study_name}.db"
+    if os.path.exists(f"Optimizer/data_optimization/{model_type}/{folder}/{index}/{study_name}.db"):
+        study = optuna.load_study(study_name=study_name, storage=storage_name, direction='maximize')
+    else:
+        study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize')
+
     study.optimize(objective, n_trials=n_trials, gc_after_trial=True)
 
        # Save the best parameters
     best_params = study.best_params
-    best_params_path = f"Optimizer/data_optimization/classifier_best_params.json"
+    best_params_path = f"Optimizer/data_optimization/{model_type}/{folder}/{index}/best_params.json"
     with open(best_params_path, "w") as f:
             json.dump(best_params, f)
 
