@@ -1,0 +1,2 @@
+model,df_len,epochs,seq_length,batch_size,learning_rate,d_model,n_layers,n_heads,d_ff,dropout,val_accuracy,time
+tst_class,39993,2,29,64,0.0002567693607737711,256,1,32,1024,0.4,0.2929393947124481,29.679800510406494

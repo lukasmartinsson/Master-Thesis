@@ -1,3 +1,0 @@
-model,seq_length,hidden_size,n_layers,rnn_dropout,fc_dropout,learning_rate,val_accuracy,time,seq_len
-lstm_class,,25,1,0.5,0.4,0.0019302736528178678,0.49714285135269165,0.06482720375061035,200.0
-lstm_class,,25,4,0.2,0.2,4.488608550455271e-05,0.49142858386039734,0.007978439331054688,200.0
