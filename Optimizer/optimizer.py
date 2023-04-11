@@ -29,9 +29,9 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
 
     def objective(trial:optuna.Trial):
        
-        seq_length = trial.suggest_int('seq_length',3, 50) # Add seq_length as a hyperparameter with appropriate values
-        batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128, 256]) # Add batch size as a hyperparameter with appropriate values
-        learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-2, log=True)  # search through all float values between 1e-6 and 1e-2 in log increment steps
+        seq_length = trial.suggest_categorical('seq_length', [5, 10, 20, 30, 40, 50]) # Add seq_length as a hyperparameter with appropriate values
+        batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128]) # Add batch size as a hyperparameter with appropriate values
+        learning_rate = trial.suggest_categorical("learning_rate",[1e-6, 1e-5, 1e-4, 1e-3, 1e-2])  # search through all float values between 1e-6 and 1e-2 in log increment steps
 
         # Changes the data into features and labels with the split used later in TSAI for modelling
         data_train, data_test, _ = preprocessing(**preprocessing_params, sequence_length=seq_length)
@@ -51,8 +51,8 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         if model_type == 'lstm_fcn_class' or model_type == 'lstm_fcn_reg':
             hidden_size = trial.suggest_categorical('hidden_size', [25, 50, 100, 200])
             rnn_layers = trial.suggest_categorical('rnn_layers', [1, 2, 4, 8])
-            rnn_dropout = trial.suggest_float("rnn_dropout", 0.0, 0.5, step=.1) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
-            fc_dropout = trial.suggest_float("fc_dropout", 0.0, 0.5, step=.1) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
+            rnn_dropout = trial.suggest_categorical("rnn_dropout", [0, 0.2, 0.4, 0.6]) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
+            fc_dropout = trial.suggest_categorical("fc_dropout", [0, 0.2, 0.4, 0.6]) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
             conv_layers = trial.suggest_categorical('conv_layers', [[64, 128, 64], [128, 256, 128], [256, 512, 256]]) # Add conv_layers as a hyperparameter with appropriate sizes
             kss = trial.suggest_categorical('kss', [[3,3,3], [5,3,3], [7,5,3], [7,7,5]]) # add kss to the search space
 
@@ -73,9 +73,9 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         if model_type == 'lstm_class' or model_type == 'lstm_reg':
             hidden_size = trial.suggest_categorical('hidden_size', [25, 50, 100, 200])
             n_layers = trial.suggest_categorical('n_layers', [1, 2, 4, 8])
-            rnn_dropout = trial.suggest_float("rnn_dropout", 0.0, 0.5, step=.1) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
-            fc_dropout = trial.suggest_float("fc_dropout", 0.0, 0.5, step=.1) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
-
+            rnn_dropout = trial.suggest_categorical("rnn_dropout", [0, 0.2, 0.4, 0.6]) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
+            fc_dropout = trial.suggest_categorical("fc_dropout", [0, 0.2, 0.4, 0.6]) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
+            
             # Initialize the LSTM model
             nr_features = X.shape[1] # Number of features
             nr_labels = torch.unique(y).numel() if CLF else 1 # Number of labels
@@ -92,7 +92,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
             n_layers = trial.suggest_categorical('n_layers', [1, 2, 4, 8])
             n_heads = trial.suggest_categorical('n_heads', [8, 16, 32])
             d_ff = trial.suggest_categorical('d_ff', [128, 256, 512, 1024])
-            dropout = trial.suggest_float("dropout", 0.0, 0.5, step=.1) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
+            dropout = trial.suggest_categorical("dropout", [0, 0.2, 0.4, 0.6]) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
 
             # Initialize the TSTPlus model
             nr_features = X.shape[1] # Number of features
@@ -111,9 +111,9 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         if model_type == 'mini_rocket':
             num_features = trial.suggest_categorical('num_features', [1000,2500,5000,10000])
             max_dilations_per_kernel = trial.suggest_categorical('max_dilations_per_kernel', [8, 16, 32, 64])
-            kernel_size = trial.suggest_int('kernal_size',2,20)
-            max_num_channels = trial.suggest_int('max_num_channels ',2,20)
-            dropout = trial.suggest_float("dropout", 0.0, 0.5, step=.1) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
+            kernel_size = trial.suggest_categorical('kernal_size',[2, 4, 8, 12, 16])
+            max_num_channels = trial.suggest_categorical('max_num_channels ',[2, 4, 8, 12, 16])
+            dropout = trial.suggest_categorical("dropout", [0, 0.2, 0.4, 0.6]) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
 
             mrf = MiniRocketFeaturesPlus(X.shape[1], X.shape[2],
                             num_features=num_features,
