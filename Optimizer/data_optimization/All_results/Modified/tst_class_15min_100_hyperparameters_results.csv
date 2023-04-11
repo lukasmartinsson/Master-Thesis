@@ -1,0 +1,9 @@
+model,df_len,epochs,lag,dif_all,train_size,index,buckets,TI,bin_accuracy,test_size,task,time_step,lag_minute,index_bin
+tst_class,14998,20,1,True,0.95,,3,False,0.4833110814419226,100,class,15min,15,False
+tst_class,14998,20,1,True,0.95,,5,True,0.4457831325301205,100,class,15min,15,False
+tst_class,14998,20,1,False,0.95,,5,True,0.4819277108433735,100,class,15min,15,False
+tst_class,14998,20,1,False,0.95,15min,1,False,0.4926568758344459,100,class,15min,15,True
+tst_class,14998,20,1,True,0.95,,15,True,0.4752342704149933,100,class,15min,15,False
+tst_class,14998,20,1,True,0.95,15min,10,True,0.4953145917001338,100,class,15min,15,True
+tst_class,14998,20,1,False,0.95,,10,True,0.4779116465863454,100,class,15min,15,False
+tst_class,14998,20,1,True,0.95,15min,1,False,0.4846461949265687,100,class,15min,15,True
