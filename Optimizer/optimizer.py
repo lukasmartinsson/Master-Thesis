@@ -147,10 +147,12 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         # Get the validation accuracy of the last epoch
         if CLF: 
             val_accuracy = learn.recorder.values[-1][2]
-            acc = get_binary_accuracy_clf(learn, data_test[0], data_test[1], preprocessing_params['buckets'])
+            acc = get_binary_accuracy_clf(learn, X[splits[1]], y[splits[1]], preprocessing_params['buckets'])
         else:
             val_mae = learn.recorder.values[-1][2]
-            acc = get_binary_accuracy_reg(learn, data_test[0], data_test[1])
+            acc = get_binary_accuracy_reg(learn, X[splits[1]], y[splits[1]])
+
+        print(len(X[splits[1]]))
 
         # Save the hyperparameters and validation accuracy in a dictionary
         if model_type == 'lstm_fcn_class':
@@ -293,7 +295,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
     else:
         study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize') # if CLF else "minimize")
         
-    study.optimize(objective, n_trials=n_trials)
+    study.optimize(objective, n_trials=n_trials, gc_after_trial=True)
 
     # Save the best parameters
     best_params = study.best_params
