@@ -8,14 +8,17 @@ from Preprocessing.preprocessing import preprocessing
 from tsai.all import *
 from fastai.callback.tracker import EarlyStoppingCallback
 
-def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15, folder : str = 'full'):
+def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n_epochs: int = 15, folder : str = 'full', index_time: str = 'None'):
 
     # Load or create a new results DataFrame
     global results_df
     
+    # Create the necessary folders if they don't exist
+    os.makedirs(f"models/{model_type}/{folder}/{index_time}", exist_ok=True)
+
     CLF = preprocessing_params['CLF']
 
-    results_file = f"models/{model_type}/{folder}/{preprocessing_params['index']}/{model_type}_hyperparameters_results.csv"
+    results_file = f"models/{model_type}/{folder}/{index_time}/{model_type}_hyperparameters_results.csv"
     if os.path.exists(results_file):
         results_df = pd.read_csv(results_file)
     else:
@@ -284,13 +287,10 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         # Return the validation accuracy value of the last epoch
         return acc
 
-    # Create the necessary folders if they don't exist
-    os.makedirs(f"models/{model_type}/{folder}/{preprocessing_params['index']}", exist_ok=True)
-
     # Load or create a new study
     study_name = f"{model_type}_study"
-    storage_name = f"sqlite:///models/{model_type}/{folder}/{preprocessing_params['index']}/{study_name}.db"
-    if os.path.exists(f"models/{model_type}/{folder}/{preprocessing_params['index']}/{study_name}.db"):
+    storage_name = f"sqlite:///models/{model_type}/{folder}/{index_time}/{study_name}.db"
+    if os.path.exists(f"models/{model_type}/{folder}/{index_time}/{study_name}.db"):
         study = optuna.load_study(study_name=study_name, storage=storage_name)
     else:
         study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize') # if CLF else "minimize")
@@ -299,7 +299,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
 
     # Save the best parameters
     best_params = study.best_params
-    best_params_path = f"models/{model_type}/{folder}/{preprocessing_params['index']}/{model_type}_best_params.json"
+    best_params_path = f"models/{model_type}/{folder}/{index_time}/{model_type}_best_params.json"
     with open(best_params_path, "w") as f:
             json.dump(best_params, f)
 
