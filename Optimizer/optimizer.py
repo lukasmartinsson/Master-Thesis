@@ -36,7 +36,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         # Changes the data into features and labels with the split used later in TSAI for modelling
         data_train, data_test, _ = preprocessing(**preprocessing_params, sequence_length=seq_length)
 
-        X, y, splits = combine_split_data([data_train[0], data_test[0]],[data_train[1], data_test[1]])
+        X, y, splits = combine_split_data([data_train[0], data_test[0][:100]],[data_train[1], data_test[1][:100]])
 
         # Utilizes the GPU if possible
         if torch.cuda.is_available(): X, y = X.cuda(), y.cuda()
@@ -130,6 +130,8 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
             nr_labels = torch.unique(y).numel() # Number of labels
             model = build_ts_model(MiniRocketHead, c_out=nr_labels, dls=dls)
 
+            X = X_feat
+
         if CLF: 
             learn = Learner(dls, model, loss_func=LabelSmoothingCrossEntropyFlat(), metrics=accuracy, cbs=[EarlyStoppingCallback(patience=5)])
         else:
@@ -140,6 +142,8 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
             learn.fit_one_cycle(n_epochs, lr_max=learning_rate)
         training_time = time.time() - start
 
+
+       
         # Get the validation accuracy of the last epoch
         if CLF: 
             val_accuracy = learn.recorder.values[-1][2]
@@ -163,7 +167,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
                 'fc_dropout': fc_dropout,
                 'conv_layers': conv_layers,
                 'kss': kss,
-                'val_accuracy': val_accuracy,
+                'val_accuracy': acc,
                 'time': training_time
             }
         
@@ -197,7 +201,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
                 'n_layers': n_layers,
                 'rnn_dropout': rnn_dropout,
                 'fc_dropout': fc_dropout,
-                'val_accuracy': val_accuracy,
+                'val_accuracy': acc,
                 'time': training_time
             }
         
@@ -230,7 +234,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
                 'n_heads': n_heads,
                 'd_ff': d_ff,
                 'dropout': dropout,
-                'val_accuracy': val_accuracy,
+                'val_accuracy': acc,
                 'time': training_time
             }
         
@@ -247,7 +251,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
                 'n_heads': n_heads,
                 'd_ff': d_ff,
                 'dropout': dropout,
-                'val_mae': val_mae,
+                'val_mae': acc,
                 'time': training_time
             }
         
@@ -264,7 +268,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
                 'kernel_size':kernel_size,
                 'max_num_channels':max_num_channels,
                 'dropout': dropout,
-                'val_accuracy': val_accuracy,
+                'val_accuracy': acc,
                 'time': training_time
             }
 
