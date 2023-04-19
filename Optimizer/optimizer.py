@@ -145,17 +145,14 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
             learn.fit_one_cycle(n_epochs, lr_max=learning_rate)
         training_time = time.time() - start
 
-
-       
         # Get the validation accuracy of the last epoch
         if CLF: 
             val_accuracy = learn.recorder.values[-1][2]
-            acc = get_binary_accuracy_clf(learn, X[splits[1]], y[splits[1]], preprocessing_params['buckets'])
+            acc = get_binary_accuracy_clf(learn, data_test[0][:100], data_test[1][:100], preprocessing_params['buckets'])
         else:
             val_mae = learn.recorder.values[-1][2]
-            acc = get_binary_accuracy_reg(learn, X[splits[1]], y[splits[1]])
+            acc = get_binary_accuracy_reg(learn, data_test[0][:100], data_test[1][:100])
 
-        print(len(X[splits[1]]))
 
         # Save the hyperparameters and validation accuracy in a dictionary
         if model_type == 'lstm_fcn_class':
@@ -292,6 +289,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
     storage_name = f"sqlite:///models/{model_type}/{folder}/{index_time}/{study_name}.db"
     if os.path.exists(f"models/{model_type}/{folder}/{index_time}/{study_name}.db"):
         study = optuna.load_study(study_name=study_name, storage=storage_name)
+        print('Study already exists, continuing')
     else:
         study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize') # if CLF else "minimize")
         
