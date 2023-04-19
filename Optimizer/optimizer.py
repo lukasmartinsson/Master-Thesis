@@ -153,6 +153,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
             val_mae = learn.recorder.values[-1][2]
             acc = get_binary_accuracy_reg(learn, data_test[0][:100], data_test[1][:100])
 
+
         # Save the hyperparameters and validation accuracy in a dictionary
         if model_type == 'lstm_fcn_class':
             trial_results = {
@@ -292,7 +293,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
     else:
         study = optuna.create_study(study_name=study_name, storage=storage_name, direction='maximize') # if CLF else "minimize")
         
-    study.optimize(objective, n_trials=n_trials)
+    study.optimize(objective, n_trials=n_trials, gc_after_trial=True)
 
     # Save the best parameters
     best_params = study.best_params
