@@ -28,11 +28,15 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         if model_type == 'lstm_reg': results_df = pd.DataFrame(columns=['model', 'df_len', 'epochs', 'seq_length','batch_size', 'learning_rate', 'hidden_size', 'n_layers', 'rnn_dropout', 'fc_dropout', 'val_mae', 'time'])
         if model_type == 'tst_class': results_df = pd.DataFrame(columns=['model', 'df_len', 'epochs', 'seq_length','batch_size', 'learning_rate', 'd_model', 'n_layers', 'n_heads', 'd_ff', 'dropout', 'val_accuracy', 'time'])
         if model_type == 'tst_reg': results_df = pd.DataFrame(columns=['model', 'df_len', 'epochs', 'seq_length','batch_size', 'learning_rate', 'd_model', 'n_layers', 'n_heads', 'd_ff', 'dropout', 'val_mae', 'time'])
-        if model_type == 'mini_rocket': results_df = pd.DataFrame(columns=['model', 'df_len', 'epochs', 'seq_length','batch_size', 'learning_rate', 'num_features', 'max_dilations_per_kernel', 'kernel_size', 'max_num_channels', 'dropout', 'val_accuracy', 'time'])
+        if model_type == 'mini_rocket_class': results_df = pd.DataFrame(columns=['model', 'df_len', 'epochs', 'seq_length','batch_size', 'learning_rate', 'num_features', 'max_dilations_per_kernel', 'kernel_size', 'max_num_channels', 'dropout', 'val_accuracy', 'time'])
 
     def objective(trial:optuna.Trial):
-       
-        seq_length = trial.suggest_categorical('seq_length', [5, 10, 20, 30, 40, 50]) # Add seq_length as a hyperparameter with appropriate values
+
+        if model_type == 'mini_rocket_class' or 'mini_rocket_reg':
+            seq_length = trial.suggest_categorical('seq_length', [20, 30, 40, 50])
+
+        else:
+            seq_length = trial.suggest_categorical('seq_length', [5, 10, 20, 30, 40, 50]) # Add seq_length as a hyperparameter with appropriate values
         batch_size = trial.suggest_categorical('batch_size', [16, 32, 64, 128]) # Add batch size as a hyperparameter with appropriate values
         learning_rate = trial.suggest_categorical("learning_rate",[1e-6, 1e-5, 1e-4, 1e-3, 1e-2])  # search through all float values between 1e-6 and 1e-2 in log increment steps
 
@@ -111,10 +115,14 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
                             d_ff=d_ff,
                             dropout=dropout)
             
-        if model_type == 'mini_rocket':
+        if model_type == 'mini_rocket_class':
+
+            #Non-pos-dilution error
+            if seq_length < 20: seq_length = 20
+
             num_features = trial.suggest_categorical('num_features', [1000,2500,5000,10000])
             max_dilations_per_kernel = trial.suggest_categorical('max_dilations_per_kernel', [8, 16, 32, 64])
-            kernel_size = trial.suggest_categorical('kernal_size',[2, 4, 8, 12, 16])
+            kernel_size = trial.suggest_categorical('kernal_size',[2, 4, 6, 8])
             max_num_channels = trial.suggest_categorical('max_num_channels ',[2, 4, 8, 12, 16])
             dropout = trial.suggest_categorical("dropout", [0, 0.2, 0.4, 0.6]) # search through all float values between 0.0 and 0.5 with 0.1 increment steps
 
@@ -131,7 +139,11 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
             dls = get_ts_dls(X_feat, y, splits=splits, bs = 32)
 
             nr_labels = torch.unique(y).numel() # Number of labels
-            model = build_ts_model(MiniRocketHead, c_out=nr_labels, dls=dls)
+            
+            if CLF:
+                model = build_ts_model(MiniRocketHead,c_out=torch.unique(y).numel(), dls=dls)
+            else:
+                model = build_ts_model(MiniRocketHead, dls=dls)
 
             X = X_feat
 
@@ -148,10 +160,10 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
         # Get the validation accuracy of the last epoch
         if CLF: 
             val_accuracy = learn.recorder.values[-1][2]
-            acc = get_binary_accuracy_clf(learn, data_test[0][:100], data_test[1][:100], preprocessing_params['buckets'])
+            acc = get_binary_accuracy_clf(learn, X[splits[1]], y[splits[1]], preprocessing_params['buckets'])
         else:
             val_mae = learn.recorder.values[-1][2]
-            acc = get_binary_accuracy_reg(learn, data_test[0][:100], data_test[1][:100])
+            acc = get_binary_accuracy_reg(learn, X[splits[1]], y[splits[1]])
 
 
         # Save the hyperparameters and validation accuracy in a dictionary
@@ -257,7 +269,7 @@ def optimize_model(model_type: str, preprocessing_params: dict, n_trials: int, n
                 'time': training_time
             }
         
-        if model_type == 'mini_rocket':
+        if model_type == 'mini_rocket_class':
             trial_results = {
                 'model': model_type,
                 'df_len': len(preprocessing_params['df']),
